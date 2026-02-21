@@ -56,37 +56,40 @@ serve(async (req) => {
     const data = await res.json();
     const organicResults = data.organic_results || [];
 
-    // Score and pick best matches
+    // Score, filter and pick the MOST AFFORDABLE relevant matches
     const searchLower = searchTerm.toLowerCase();
     const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 2);
 
-    const scored = organicResults.map((item: any) => {
-      const title = (item.title || "").toLowerCase();
-      let score = 0;
+    const candidates = organicResults
+      .map((item: any) => {
+        const title = (item.title || "").toLowerCase();
+        const price = item.primary_offer?.offer_price ?? item.price ?? null;
+        const numPrice = typeof price === "number" ? price : (typeof price === "string" ? parseFloat(price) : null);
 
-      if (title.includes(searchLower)) score += 10;
-      for (const kw of keywords) {
-        if (title.includes(kw)) score += 3;
-      }
+        // Relevance: must match at least one keyword
+        let relevance = 0;
+        if (title.includes(searchLower)) relevance += 10;
+        for (const kw of keywords) {
+          if (title.includes(kw)) relevance += 3;
+        }
 
-      // Prefer items with a price
-      const price = item.primary_offer?.offer_price ?? item.price ?? null;
-      if (price != null) score += 8;
+        return {
+          productId: item.us_item_id || item.product_id || String(Math.random()),
+          name: item.title,
+          brand: item.brand || "",
+          size: "",
+          price: numPrice,
+          available: true,
+          rating: item.rating ?? null,
+          _relevance: relevance,
+        };
+      })
+      // Only keep relevant results with a valid price
+      .filter((p: any) => p._relevance >= 3 && p.price != null && p.price > 0);
 
-      return {
-        productId: item.us_item_id || item.product_id || String(Math.random()),
-        name: item.title,
-        brand: item.brand || "",
-        size: "",
-        price: typeof price === "number" ? price : (typeof price === "string" ? parseFloat(price) : null),
-        available: true,
-        rating: item.rating ?? null,
-        _score: score,
-      };
-    });
-
-    scored.sort((a: any, b: any) => b._score - a._score);
-    const products = scored.slice(0, 3).map(({ _score, ...rest }: any) => rest);
+    // Sort by cheapest price first (affordability is king)
+    candidates.sort((a: any, b: any) => a.price - b.price);
+    const products = candidates.slice(0, 3).map(({ _relevance, ...rest }: any) => rest);
 
     return new Response(JSON.stringify({ products }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
