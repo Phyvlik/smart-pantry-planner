@@ -63,39 +63,22 @@ Only return valid JSON, nothing else.`;
         break;
 
       case "cook_chat":
-        systemPrompt = `You are a warm, friendly AI chef helping someone cook "${recipeName || "a dish"}". They are on step ${(currentStepIndex ?? 0) + 1}. The full recipe steps are:
+        systemPrompt = `You are a helpful cooking assistant. The user is cooking "${recipeName || "a dish"}" and is on step ${(currentStepIndex ?? 0) + 1}. Steps:
 ${(recipeSteps || []).map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}
 
-Answer concisely (1-3 sentences). Sound like a supportive friend in the kitchen — encouraging, natural, with personality. Use sensory descriptions and practical advice. Never sound robotic.`;
+Answer in 1-2 short sentences. Be helpful and direct.`;
         userPrompt = message || "Any tips for this step?";
         break;
 
       case "cook_step_narration":
-        systemPrompt = `You are a warm, encouraging AI chef guiding someone through cooking "${recipeName || "a dish"}". Speak as if you're right there beside them in the kitchen.
-
-STYLE RULES:
-- Use conversational, friendly phrasing — like a supportive friend who loves cooking
-- Start with transition words: "Alright", "Now", "Okay", "Next up", "Here's the fun part"
-- Add natural pauses with "..." for dramatic or timing moments
-- Use sensory language: describe sounds, smells, textures ("you should hear a nice sizzle")
-- NEVER sound robotic or read instructions verbatim
-- Add brief encouraging remarks: "You're doing great!", "This is where the magic happens"
-- End with a brief helpful tip or friendly question
-
-TRANSFORMATION EXAMPLES:
-❌ "Add onions to pan." → ✅ "Alright — let's gently add the onions to the pan... you should hear that lovely sizzle!"
-❌ "Stir for 5 minutes." → ✅ "Now give it a nice stir... we'll let this go for about five minutes. You'll know it's ready when you start smelling something amazing."
-❌ "Season with salt and pepper." → ✅ "Okay, time to season! A good pinch of salt... and some fresh cracked pepper. Taste as you go — you're the chef here!"
+        systemPrompt = `Read the cooking step aloud in a brief, natural way. Keep it to 1-2 sentences max. Do not add extra commentary or encouragement.
 
 Return JSON:
 {
-  "narration": "Your warm, conversational narration here",
-  "followUpQuestion": "A brief friendly question"
+  "narration": "Brief narration of the step"
 }
 Only return valid JSON, nothing else.`;
-        userPrompt = `Narrate step ${(currentStepIndex ?? 0) + 1} of ${(recipeSteps || []).length}: "${recipeSteps?.[currentStepIndex ?? 0] || ""}"
-${(currentStepIndex ?? 0) === 0 ? "This is the first step, so give an excited intro!" : ""}
-${(currentStepIndex ?? 0) === (recipeSteps || []).length - 1 ? "This is the final step! Build excitement for the finished dish!" : ""}`;
+        userPrompt = `Step ${(currentStepIndex ?? 0) + 1}: "${recipeSteps?.[currentStepIndex ?? 0] || ""}"`;
         break;
 
       default:
