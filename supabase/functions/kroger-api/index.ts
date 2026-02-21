@@ -150,9 +150,10 @@ serve(async (req) => {
         // Also penalize if "baby" is in desc but not in cleaned search
         if (desc.includes("baby") && !searchLower.includes("baby")) score -= 5;
 
-        // Boost items with price and availability
-        if (item?.price?.regular || item?.price?.promo) score += 2;
-        if (item?.fulfillment?.inStore === true) score += 2;
+        // Strongly boost items with price — this is key for the UI
+        const hasPrice = !!(item?.price?.regular || item?.price?.promo);
+        if (hasPrice) score += 8;
+        if (item?.fulfillment?.inStore === true) score += 3;
 
         return {
           productId: p.productId,
