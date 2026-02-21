@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingCart, ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store, DollarSign } from "lucide-react";
+import { StorePricesPanel } from "@/components/StorePricesPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -56,9 +57,7 @@ export default function IngredientFinderPage() {
   const [zip, setZip] = useState("");
   const [locations, setLocations] = useState<KrogerLocation[]>([]);
   const [selectedStore, setSelectedStore] = useState<KrogerLocation | null>(null);
-  const [products, setProducts] = useState<Record<string, KrogerProduct[]>>({});
   const [isSearchingStores, setIsSearchingStores] = useState(false);
-  const [isLoadingPrices, setIsLoadingPrices] = useState(false);
   const [missingIngredients, setMissingIngredients] = useState<string[]>([]);
 
   useEffect(() => {
@@ -99,30 +98,10 @@ export default function IngredientFinderPage() {
     }
   }, [zip, missingIngredients]);
 
-  const selectStore = useCallback(async (store: KrogerLocation) => {
+  const selectStore = useCallback((store: KrogerLocation) => {
     setSelectedStore(store);
     setStep("prices");
-    setIsLoadingPrices(true);
-    setProducts({});
-
-    try {
-      for (const ing of missingIngredients) {
-        try {
-          const { products: prods } = await krogerFetch("products", {
-            q: ing,
-            locationId: store.locationId,
-          });
-          setProducts((prev) => ({ ...prev, [ing]: prods || [] }));
-        } catch {
-          setProducts((prev) => ({ ...prev, [ing]: [] }));
-        }
-      }
-    } catch (err: any) {
-      toast.error("Failed to load prices.");
-    } finally {
-      setIsLoadingPrices(false);
-    }
-  }, [missingIngredients]);
+  }, []);
 
   const handleBuyFromStore = () => {
     if (selectedStore && recipe) {
@@ -153,30 +132,6 @@ export default function IngredientFinderPage() {
     );
   }
 
-  // Helper to get best product for an ingredient
-  const getBestProduct = (ingName: string) => {
-    const prods = products[ingName] || [];
-    return prods.find((p) => p.available === true && p.price != null)
-      || prods.find((p) => p.available === true)
-      || prods.find((p) => p.price != null)
-      || prods[0] || null;
-  };
-
-  // Get the display price: Kroger price first, then recipe's estimated price as fallback
-  const getDisplayPrice = (ingName: string): number | null => {
-    const best = getBestProduct(ingName);
-    if (best?.price != null) return best.price;
-    // Fallback to recipe's estimatedPrice
-    const recipeIng = recipe.ingredients.find((i) => i.name === ingName);
-    return recipeIng?.estimatedPrice ?? null;
-  };
-
-  // Calculate total for loaded products
-  const loadedIngredients = Object.keys(products);
-  const totalPrice = missingIngredients.reduce((sum, ing) => {
-    return sum + (getDisplayPrice(ing) ?? 0);
-  }, 0);
-  const availableCount = missingIngredients.filter((ing) => getBestProduct(ing) != null).length;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -189,7 +144,7 @@ export default function IngredientFinderPage() {
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         <button onClick={() => {
-          if (step === "prices") { setStep("stores"); setProducts({}); }
+          if (step === "prices") { setStep("stores"); }
           else if (step === "stores") { setStep("ingredients"); setLocations([]); }
           else navigate(-1);
         }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
@@ -301,118 +256,18 @@ export default function IngredientFinderPage() {
 
           {/* Step 3: Show prices for selected store */}
           {step === "prices" && selectedStore && (
-            <motion.div key="prices" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <div className="glass-card rounded-2xl overflow-hidden mb-6">
-                {/* Store header */}
-                <div className="p-4 flex items-center gap-3 border-b border-border">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Store className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <div className="font-semibold">{selectedStore.name}</div>
-                    <div className="text-xs text-muted-foreground">{selectedStore.address}</div>
-                  </div>
-                </div>
-
-                {/* Ingredient prices */}
-                <div className="p-4">
-                  <h3 className="font-serif font-semibold mb-3 flex items-center gap-2">
-                    <DollarSign className="w-5 h-5 text-primary" /> Ingredient Prices
-                  </h3>
-                  <div className="grid gap-2">
-                    {missingIngredients.map((ingName) => {
-                      const loaded = ingName in products;
-                      const best = getBestProduct(ingName);
-                      const hasProduct = loaded && best != null;
-                      const notFound = loaded && !best;
-                      const displayPrice = loaded ? getDisplayPrice(ingName) : null;
-                      const isEstimated = hasProduct && best?.price == null && displayPrice != null;
-
-                      return (
-                        <div key={ingName} className="py-2 px-3 rounded-lg bg-muted/30">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {!loaded ? (
-                                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
-                              ) : hasProduct ? (
-                                <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                              ) : (
-                                <XCircle className="w-4 h-4 text-destructive shrink-0" />
-                              )}
-                              <div className="min-w-0">
-                                <span className={`text-sm ${!loaded ? "text-muted-foreground" : hasProduct ? "" : "text-muted-foreground"}`}>
-                                  {ingName}
-                                </span>
-                                {best && (
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {best.name} {best.size ? `· ${best.size}` : ""}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0 ml-3">
-                              {!loaded ? (
-                                <Skeleton className="h-5 w-14" />
-                              ) : displayPrice != null ? (
-                                <div className="text-right">
-                                  <span className="font-semibold text-sm">${displayPrice.toFixed(2)}</span>
-                                  {isEstimated && <p className="text-[10px] text-muted-foreground">est.</p>}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-destructive">Not found</span>
-                              )}
-                            </div>
-                          </div>
-                          {notFound && (
-                            <p className="text-xs text-muted-foreground mt-1 ml-6 italic">
-                              💡 Try substituting with a similar ingredient or check another store
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Total */}
-                  {!isLoadingPrices && (
-                    <div className="mt-4 pt-3 border-t border-border">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-semibold">Estimated Total</span>
-                        <span className="font-bold text-lg">{totalPrice > 0 ? `$${totalPrice.toFixed(2)}` : "—"}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {availableCount} of {missingIngredients.length} ingredients available at this store
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Buy button */}
-                {!isLoadingPrices && (
-                  <div className="px-4 pb-4">
-                    <Button
-                      onClick={handleBuyFromStore}
-                      className="w-full bg-gradient-hero"
-                    >
-                      <ShoppingCart className="w-4 h-4 mr-2" />
-                      Buy & Start Cooking
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => { setStep("stores"); setProducts({}); }}
-                className="block mx-auto text-sm text-muted-foreground hover:text-foreground"
-              >
-                ← Try a different store
-              </button>
-            </motion.div>
+            <StorePricesPanel
+              recipe={recipe}
+              missingIngredients={missingIngredients}
+              selectedStore={selectedStore}
+              onBuy={handleBuyFromStore}
+              onBack={() => setStep("stores")}
+            />
           )}
         </AnimatePresence>
 
         <p className="text-xs text-muted-foreground mt-6 text-center">
-          Powered by Kroger Product API. Prices and availability may vary.
+          Powered by Kroger & Walmart APIs. Prices and availability may vary.
         </p>
       </main>
     </div>
