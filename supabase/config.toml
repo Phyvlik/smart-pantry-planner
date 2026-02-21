@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.elevenlabs-tts]
 verify_jwt = false
+
+[functions.kroger-api]
+verify_jwt = false
