@@ -122,41 +122,34 @@ serve(async (req) => {
       }
       const data = await res.json();
 
-      // Score products by relevance to the cleaned search term
+      // Score products by relevance, then pick the CHEAPEST relevant ones
       const searchLower = searchTerm.toLowerCase();
       const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 2);
 
-      const scored = (data.data || []).map((p: any) => {
+      const candidates = (data.data || []).map((p: any) => {
         const item = p.items?.[0];
         const desc = (p.description || "").toLowerCase();
         const cat = ((p.categories || []) as string[]).join(" ").toLowerCase();
 
-        let score = 0;
+        let relevance = 0;
 
         // Exact match boost
-        if (desc.includes(searchLower)) score += 10;
+        if (desc.includes(searchLower)) relevance += 10;
 
         // Keyword match
         for (const kw of keywords) {
-          if (desc.includes(kw)) score += 3;
-          if (cat.includes(kw)) score += 1;
+          if (desc.includes(kw)) relevance += 3;
+          if (cat.includes(kw)) relevance += 1;
         }
 
-        // Penalize non-grocery items (baby food, cleaning, pet, etc.)
+        // Penalize non-grocery items
         const nonFoodTerms = ["baby food", "baby puree", "teether", "formula", "cleaning", "detergent", "shampoo", "soap", "lotion", "diaper", "pet food", "dog food", "cat food", "supplement", "vitamin"];
         for (const nf of nonFoodTerms) {
-          if (desc.includes(nf) || cat.includes(nf)) score -= 10;
+          if (desc.includes(nf) || cat.includes(nf)) relevance -= 10;
         }
-        // Also penalize if "baby" is in desc but not in cleaned search
-        if (desc.includes("baby") && !searchLower.includes("baby")) score -= 5;
-
-        // Strongly boost items with price — this is key for the UI
-        const hasPrice = !!(item?.price?.regular || item?.price?.promo);
-        if (hasPrice) score += 8;
-        if (item?.fulfillment?.inStore === true) score += 3;
+        if (desc.includes("baby") && !searchLower.includes("baby")) relevance -= 5;
 
         const price = item?.price?.regular ?? item?.price?.promo ?? null;
-        // If we found a product from Kroger, treat it as available (cert env has limited fulfillment data)
         const isAvailable = !!(price || item?.fulfillment?.inStore || p.productId);
 
         return {
@@ -166,13 +159,15 @@ serve(async (req) => {
           size: item?.size || "",
           price,
           available: isAvailable,
-          _score: score,
+          _relevance: relevance,
         };
-      });
+      })
+      // Only keep relevant results with a valid price
+      .filter((p: any) => p._relevance >= 3 && p.price != null && p.price > 0);
 
-      // Sort by score descending and take top 3
-      scored.sort((a: any, b: any) => b._score - a._score);
-      const products = scored.slice(0, 3).map(({ _score, ...rest }: any) => rest);
+      // Sort by cheapest price first (affordability is king)
+      candidates.sort((a: any, b: any) => a.price - b.price);
+      const products = candidates.slice(0, 3).map(({ _relevance, ...rest }: any) => rest);
 
       return new Response(JSON.stringify({ products }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
