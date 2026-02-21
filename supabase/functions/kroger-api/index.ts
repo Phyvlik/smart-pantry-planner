@@ -88,8 +88,18 @@ serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Clean up ingredient search term for better Kroger results
+      const cleanTerm = q
+        .replace(/\b(fresh|organic|large|medium|small|jumbo|whole|ground|minced|dried|frozen|raw|pure|extra|virgin)\b/gi, "")
+        .replace(/\b(cloves?|heads?|stalks?|bunche?s?|pieces?|sticks?)\b/gi, "")
+        .replace(/\b\d+(\.\d+)?\s*(cups?|tbsp|tsp|lbs?|oz|pounds?|ounces?|fl\s*oz|quarts?|gallons?|ml|liters?)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const searchTerm = cleanTerm || q;
       const token = await getKrogerToken();
-      let apiUrl = `https://api-ce.kroger.com/v1/products?filter.term=${encodeURIComponent(q)}&filter.limit=3`;
+      let apiUrl = `https://api-ce.kroger.com/v1/products?filter.term=${encodeURIComponent(searchTerm)}&filter.limit=10`;
       if (locationId) apiUrl += `&filter.locationId=${encodeURIComponent(locationId)}`;
       const res = await fetch(apiUrl, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -100,8 +110,33 @@ serve(async (req) => {
         throw new Error(`Kroger products failed: ${res.status}`);
       }
       const data = await res.json();
-      const products = (data.data || []).map((p: any) => {
+
+      // Score products by relevance to the original ingredient
+      const qLower = q.toLowerCase();
+      const keywords = qLower.split(/\s+/).filter((w: string) => w.length > 2);
+
+      const scored = (data.data || []).map((p: any) => {
         const item = p.items?.[0];
+        const desc = (p.description || "").toLowerCase();
+        const cat = ((p.categories || []) as string[]).join(" ").toLowerCase();
+
+        // Relevance score: how many keywords appear in description
+        let score = 0;
+        for (const kw of keywords) {
+          if (desc.includes(kw)) score += 2;
+          if (cat.includes(kw)) score += 1;
+        }
+
+        // Penalize non-food items (baby powder, cleaning products, etc.)
+        const nonFoodTerms = ["baby", "powder", "cleaning", "detergent", "shampoo", "soap", "lotion", "diaper"];
+        for (const nf of nonFoodTerms) {
+          if (desc.includes(nf) && !qLower.includes(nf)) score -= 5;
+        }
+
+        // Boost items with price and availability
+        if (item?.price?.regular || item?.price?.promo) score += 1;
+        if (item?.fulfillment?.inStore === true) score += 1;
+
         return {
           productId: p.productId,
           name: p.description,
@@ -109,8 +144,14 @@ serve(async (req) => {
           size: item?.size || "",
           price: item?.price?.regular ?? item?.price?.promo ?? null,
           available: item?.fulfillment?.inStore ?? null,
+          _score: score,
         };
       });
+
+      // Sort by score descending and take top 3
+      scored.sort((a: any, b: any) => b._score - a._score);
+      const products = scored.slice(0, 3).map(({ _score, ...rest }: any) => rest);
+
       return new Response(JSON.stringify({ products }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
