@@ -127,8 +127,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
         const best = getBestProduct(storeProducts[ingName] || []);
         const hasProduct = loaded && best != null;
         const notFound = loaded && !best;
-        const prices = loaded ? getDisplayPrice(ingName, storeProducts, recipe) : null;
-        const mainPrice = prices?.recipePrice ?? prices?.storePrice ?? null;
+        const mainPrice = best?.price ?? null;
 
         return (
           <div key={ingName} className="py-3 px-4 rounded-xl bg-muted/30">
@@ -176,15 +175,9 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
       {!isLoading && (
         <div className="mt-4 pt-4 border-t border-border">
           <div className="flex justify-between items-center mb-1">
-            <span className="font-semibold">Recipe Cost</span>
-            <span className="font-bold text-lg">{recipeTotal > 0 ? `$${recipeTotal.toFixed(2)}` : "—"}</span>
+            <span className="font-semibold">Estimated Total</span>
+            <span className="font-bold text-lg">{calcStoreTotal(storeProducts) > 0 ? `$${calcStoreTotal(storeProducts).toFixed(2)}` : "—"}</span>
           </div>
-          {calcStoreTotal(storeProducts) > 0 && (
-            <div className="flex justify-between items-center mb-1 text-muted-foreground">
-              <span className="text-xs">Store checkout total (whole items)</span>
-              <span className="text-xs font-medium">${calcStoreTotal(storeProducts).toFixed(2)}</span>
-            </div>
-          )}
           <p className="text-xs text-muted-foreground">
             {missingIngredients.filter((ing) => getBestProduct(storeProducts[ing] || []) != null).length} of{" "}
             {missingIngredients.length} ingredients found
