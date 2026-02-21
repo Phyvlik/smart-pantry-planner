@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { action, dish, pantryItems, recipe } = await req.json();
+    const { action, dish, pantryItems, recipe, message, recipeName, recipeSteps, currentStepIndex } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -60,6 +60,14 @@ Only return valid JSON, nothing else.`;
 }
 Only return valid JSON, nothing else.`;
         userPrompt = `My pantry contains: ${pantryItems?.join(", ") || "nothing specified"}`;
+        break;
+
+      case "cook_chat":
+        systemPrompt = `You are SmartCart AI, a friendly cooking assistant helping someone cook "${recipeName || "a dish"}". They are currently on step ${(currentStepIndex ?? 0) + 1}. The full recipe steps are:
+${(recipeSteps || []).map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}
+
+Answer their cooking questions concisely (1-3 sentences). Be warm and helpful. If they ask about substitutions, timing, or technique, give practical advice.`;
+        userPrompt = message || "Any tips for this step?";
         break;
 
       default:
