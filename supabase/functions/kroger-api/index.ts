@@ -89,11 +89,22 @@ serve(async (req) => {
         });
       }
 
-      // Clean up ingredient search term for better Kroger results
+      // Strip ALL amounts, units, qualifiers — search only the base ingredient
       const cleanTerm = q
-        .replace(/\b(fresh|organic|large|medium|small|jumbo|whole|ground|minced|dried|frozen|raw|pure|extra|virgin)\b/gi, "")
-        .replace(/\b(cloves?|heads?|stalks?|bunche?s?|pieces?|sticks?)\b/gi, "")
-        .replace(/\b\d+(\.\d+)?\s*(cups?|tbsp|tsp|lbs?|oz|pounds?|ounces?|fl\s*oz|quarts?|gallons?|ml|liters?)\b/gi, "")
+        // Remove leading numbers, fractions, ranges (e.g. "2", "1/2", "2-3")
+        .replace(/^[\d\s\/\-\.]+/, "")
+        // Remove number+unit combos (e.g. "2 cups", "1.5 lbs")
+        .replace(/\b\d+(\.\d+)?\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|lbs?|oz|pounds?|ounces?|fl\s*oz|quarts?|gallons?|ml|liters?|inch|inches|cm|pinch(es)?|dash(es)?|can|cans|pkg|package|bag|bottle|jar)\b/gi, "")
+        // Remove standalone count/form words (e.g. "cloves", "stalks", "heads")
+        .replace(/\b(cloves?|heads?|stalks?|bunche?s?|pieces?|sticks?|slices?|fillets?|breasts?|thighs?|legs?|sprigs?|sheets?|strips?|cubes?|wedges?|ears?|ribs?)\b/gi, "")
+        // Remove size/prep qualifiers
+        .replace(/\b(fresh|organic|large|medium|small|jumbo|whole|half|ground|minced|dried|frozen|raw|pure|extra|virgin|boneless|skinless|thin|thick|fine|coarse|chopped|diced|sliced|shredded|grated|crushed|peeled|deveined|trimmed|packed|loosely|firmly|divided|optional|to taste|for garnish|as needed|about|approximately|roughly|ripe|uncooked|cooked|softened|melted|room temperature|cold|warm|hot)\b/gi, "")
+        // Remove parentheticals
+        .replace(/\(.*?\)/g, "")
+        // Remove leftover numbers
+        .replace(/\b\d+(\.\d+|\/\d+)?\b/g, "")
+        // Collapse whitespace, commas, hyphens
+        .replace(/[,\-]+/g, " ")
         .replace(/\s+/g, " ")
         .trim();
 
@@ -111,31 +122,37 @@ serve(async (req) => {
       }
       const data = await res.json();
 
-      // Score products by relevance to the original ingredient
-      const qLower = q.toLowerCase();
-      const keywords = qLower.split(/\s+/).filter((w: string) => w.length > 2);
+      // Score products by relevance to the cleaned search term
+      const searchLower = searchTerm.toLowerCase();
+      const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 2);
 
       const scored = (data.data || []).map((p: any) => {
         const item = p.items?.[0];
         const desc = (p.description || "").toLowerCase();
         const cat = ((p.categories || []) as string[]).join(" ").toLowerCase();
 
-        // Relevance score: how many keywords appear in description
         let score = 0;
+
+        // Exact match boost
+        if (desc.includes(searchLower)) score += 10;
+
+        // Keyword match
         for (const kw of keywords) {
-          if (desc.includes(kw)) score += 2;
+          if (desc.includes(kw)) score += 3;
           if (cat.includes(kw)) score += 1;
         }
 
-        // Penalize non-food items (baby powder, cleaning products, etc.)
-        const nonFoodTerms = ["baby", "powder", "cleaning", "detergent", "shampoo", "soap", "lotion", "diaper"];
+        // Penalize non-grocery items (baby food, cleaning, pet, etc.)
+        const nonFoodTerms = ["baby food", "baby puree", "teether", "formula", "cleaning", "detergent", "shampoo", "soap", "lotion", "diaper", "pet food", "dog food", "cat food", "supplement", "vitamin"];
         for (const nf of nonFoodTerms) {
-          if (desc.includes(nf) && !qLower.includes(nf)) score -= 5;
+          if (desc.includes(nf) || cat.includes(nf)) score -= 10;
         }
+        // Also penalize if "baby" is in desc but not in cleaned search
+        if (desc.includes("baby") && !searchLower.includes("baby")) score -= 5;
 
         // Boost items with price and availability
-        if (item?.price?.regular || item?.price?.promo) score += 1;
-        if (item?.fulfillment?.inStore === true) score += 1;
+        if (item?.price?.regular || item?.price?.promo) score += 2;
+        if (item?.fulfillment?.inStore === true) score += 2;
 
         return {
           productId: p.productId,
