@@ -6,7 +6,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Strip amounts, units, qualifiers — search only the base ingredient
 function cleanSearchTerm(q: string): string {
   return q
     .replace(/^[\d\s\/\-\.]+/, "")
@@ -18,6 +17,74 @@ function cleanSearchTerm(q: string): string {
     .replace(/[,\-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function scoreResults(items: any[], searchTerm: string) {
+  const searchLower = searchTerm.toLowerCase();
+  const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 1);
+
+  return items.map((item: any) => {
+    const title = (item.title || "").toLowerCase();
+    const price = item.primary_offer?.offer_price ?? item.price ?? null;
+    const numPrice = typeof price === "number" ? price : (typeof price === "string" ? parseFloat(price) : null);
+
+    let relevance = 0;
+    if (title.includes(searchLower)) relevance += 15;
+
+    let kwMatches = 0;
+    for (const kw of keywords) {
+      if (title.includes(kw)) { relevance += 3; kwMatches++; }
+    }
+    if (keywords.length > 0 && kwMatches === keywords.length) relevance += 5;
+
+    const freshTerms = ["fresh", "produce", "each", "bunch", "bulb"];
+    const specialtyTerms = ["powder", "dehydrated", "dried", "freeze-dried", "supplement", "extract", "capsule", "pill", "spice lab", "seasoning mix"];
+    const isFreshSearch = !searchLower.includes("powder") && !searchLower.includes("dried") && !searchLower.includes("spice");
+
+    if (isFreshSearch) {
+      for (const st of specialtyTerms) {
+        if (title.includes(st)) relevance -= 8;
+      }
+      for (const ft of freshTerms) {
+        if (title.includes(ft)) relevance += 2;
+      }
+    }
+
+    if (numPrice != null && numPrice > 6) relevance -= 3;
+
+    return {
+      productId: item.us_item_id || item.product_id || String(Math.random()),
+      name: item.title,
+      brand: item.brand || "",
+      size: "",
+      price: numPrice,
+      available: true,
+      rating: item.rating ?? null,
+      _relevance: relevance,
+    };
+  });
+}
+
+function getFallbackTerms(term: string): string[] {
+  const words = term.split(/\s+/);
+  const fallbacks: string[] = [];
+  if (words.length >= 2) {
+    fallbacks.push(words.slice(1).join(" "));
+    fallbacks.push(words.slice(0, -1).join(" "));
+    if (words.length >= 3) {
+      fallbacks.push(words[0]);
+      fallbacks.push(words[words.length - 1]);
+    }
+  }
+  return [...new Set(fallbacks)].filter(t => t.length > 2);
+}
+
+async function searchWalmart(apiKey: string, term: string): Promise<any[]> {
+  const url = `https://serpapi.com/search.json?engine=walmart&query=${encodeURIComponent(term)}&api_key=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.organic_results || [];
 }
 
 serve(async (req) => {
@@ -44,71 +111,23 @@ serve(async (req) => {
     const searchTerm = cleanSearchTerm(q) || q;
     console.log(`Walmart search: "${q}" -> "${searchTerm}"`);
 
-    const url = `https://serpapi.com/search.json?engine=walmart&query=${encodeURIComponent(searchTerm)}&api_key=${apiKey}`;
-    const res = await fetch(url);
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("SerpAPI error:", res.status, errText);
-      throw new Error(`SerpAPI request failed: ${res.status}`);
-    }
-
-    const data = await res.json();
-    const organicResults = data.organic_results || [];
-
-    // Score, filter and pick the MOST AFFORDABLE relevant matches
-    const searchLower = searchTerm.toLowerCase();
-    const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 1);
-
-    const candidates = organicResults
-      .map((item: any) => {
-        const title = (item.title || "").toLowerCase();
-        const price = item.primary_offer?.offer_price ?? item.price ?? null;
-        const numPrice = typeof price === "number" ? price : (typeof price === "string" ? parseFloat(price) : null);
-
-        // Relevance: must match keywords well
-        let relevance = 0;
-        if (title.includes(searchLower)) relevance += 15;
-        
-        let kwMatches = 0;
-        for (const kw of keywords) {
-          if (title.includes(kw)) { relevance += 3; kwMatches++; }
-        }
-        // Bonus if ALL keywords match
-        if (keywords.length > 0 && kwMatches === keywords.length) relevance += 5;
-
-        // Penalize specialty/bulk/dried versions when searching for fresh items
-        const freshTerms = ["fresh", "produce", "each", "bunch", "bulb"];
-        const specialtyTerms = ["powder", "dehydrated", "dried", "freeze-dried", "supplement", "extract", "capsule", "pill", "spice lab", "seasoning mix"];
-        const isFreshSearch = !searchLower.includes("powder") && !searchLower.includes("dried") && !searchLower.includes("spice");
-        
-        if (isFreshSearch) {
-          for (const st of specialtyTerms) {
-            if (title.includes(st)) relevance -= 8;
-          }
-          for (const ft of freshTerms) {
-            if (title.includes(ft)) relevance += 2;
-          }
-        }
-
-        // Penalize very expensive items (likely specialty/bulk)
-        if (numPrice != null && numPrice > 6) relevance -= 3;
-
-        return {
-          productId: item.us_item_id || item.product_id || String(Math.random()),
-          name: item.title,
-          brand: item.brand || "",
-          size: "",
-          price: numPrice,
-          available: true,
-          rating: item.rating ?? null,
-          _relevance: relevance,
-        };
-      })
-      // Only keep relevant results with a valid price
+    // Primary search
+    let rawItems = await searchWalmart(apiKey, searchTerm);
+    let candidates = scoreResults(rawItems, searchTerm)
       .filter((p: any) => p._relevance >= 5 && p.price != null && p.price > 0);
 
-    // Sort by cheapest price first (affordability is king)
+    // Fallback: try simplified terms if nothing found
+    if (candidates.length === 0) {
+      const fallbacks = getFallbackTerms(searchTerm);
+      for (const fb of fallbacks) {
+        console.log(`Walmart fallback search: "${fb}"`);
+        rawItems = await searchWalmart(apiKey, fb);
+        candidates = scoreResults(rawItems, fb)
+          .filter((p: any) => p._relevance >= 3 && p.price != null && p.price > 0);
+        if (candidates.length > 0) break;
+      }
+    }
+
     candidates.sort((a: any, b: any) => a.price - b.price);
     const products = candidates.slice(0, 3).map(({ _relevance, ...rest }: any) => rest);
 

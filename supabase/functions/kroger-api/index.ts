@@ -39,6 +39,89 @@ async function getKrogerToken(): Promise<string> {
   return cachedToken!;
 }
 
+function cleanSearchTerm(q: string): string {
+  return q
+    .replace(/^[\d\s\/\-\.]+/, "")
+    .replace(/\b\d+(\.\d+)?\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|lbs?|oz|pounds?|ounces?|fl\s*oz|quarts?|gallons?|ml|liters?|inch|inches|cm|pinch(es)?|dash(es)?|can|cans|pkg|package|bag|bottle|jar)\b/gi, "")
+    .replace(/\b(cloves?|heads?|stalks?|bunche?s?|pieces?|sticks?|slices?|fillets?|breasts?|thighs?|legs?|sprigs?|sheets?|strips?|cubes?|wedges?|ears?|ribs?)\b/gi, "")
+    .replace(/\b(fresh|organic|large|medium|small|jumbo|whole|half|ground|minced|dried|frozen|raw|pure|extra|virgin|boneless|skinless|thin|thick|fine|coarse|chopped|diced|sliced|shredded|grated|crushed|peeled|deveined|trimmed|packed|loosely|firmly|divided|optional|to taste|for garnish|as needed|about|approximately|roughly|ripe|uncooked|cooked|softened|melted|room temperature|cold|warm|hot)\b/gi, "")
+    .replace(/\(.*?\)/g, "")
+    .replace(/\b\d+(\.\d+|\/\d+)?\b/g, "")
+    .replace(/[,\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function scoreProducts(items: any[], searchTerm: string) {
+  const searchLower = searchTerm.toLowerCase();
+  const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 1);
+
+  return items.map((p: any) => {
+    const item = p.items?.[0];
+    const desc = (p.description || "").toLowerCase();
+    const cat = ((p.categories || []) as string[]).join(" ").toLowerCase();
+
+    let relevance = 0;
+    if (desc.includes(searchLower)) relevance += 15;
+
+    let kwMatches = 0;
+    for (const kw of keywords) {
+      if (desc.includes(kw)) { relevance += 3; kwMatches++; }
+      else if (cat.includes(kw)) { relevance += 1; kwMatches++; }
+    }
+    if (keywords.length > 0 && kwMatches === keywords.length) relevance += 5;
+
+    const nonFoodTerms = ["baby food", "baby puree", "teether", "formula", "cleaning", "detergent", "shampoo", "soap", "lotion", "diaper", "pet food", "dog food", "cat food", "supplement", "vitamin"];
+    for (const nf of nonFoodTerms) {
+      if (desc.includes(nf) || cat.includes(nf)) relevance -= 10;
+    }
+    if (desc.includes("baby") && !searchLower.includes("baby")) relevance -= 5;
+
+    const price = item?.price?.promo ?? item?.price?.regular ?? null;
+    const isAvailable = !!(price || item?.fulfillment?.inStore || p.productId);
+
+    return {
+      productId: p.productId,
+      name: p.description,
+      brand: p.brand,
+      size: item?.size || "",
+      price,
+      available: isAvailable,
+      _relevance: relevance,
+    };
+  });
+}
+
+async function searchProducts(token: string, term: string, locationId?: string): Promise<any[]> {
+  let apiUrl = `https://api-ce.kroger.com/v1/products?filter.term=${encodeURIComponent(term)}&filter.limit=10`;
+  if (locationId) apiUrl += `&filter.locationId=${encodeURIComponent(locationId)}`;
+  const res = await fetch(apiUrl, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.data || [];
+}
+
+// Generate fallback search terms by splitting compound ingredient names
+function getFallbackTerms(term: string): string[] {
+  const words = term.split(/\s+/);
+  const fallbacks: string[] = [];
+  
+  // Try removing first word (e.g. "Dabeli Masala" → "Masala")
+  if (words.length >= 2) {
+    fallbacks.push(words.slice(1).join(" "));
+    // Try removing last word (e.g. "Tamarind Date Chutney" → "Tamarind Date")
+    fallbacks.push(words.slice(0, -1).join(" "));
+    // Try first word only and last word only
+    if (words.length >= 3) {
+      fallbacks.push(words[0]);
+      fallbacks.push(words[words.length - 1]);
+    }
+  }
+  return [...new Set(fallbacks)].filter(t => t.length > 2);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -89,94 +172,26 @@ serve(async (req) => {
         });
       }
 
-      // Strip ALL amounts, units, qualifiers — search only the base ingredient
-      const cleanTerm = q
-        // Remove leading numbers, fractions, ranges (e.g. "2", "1/2", "2-3")
-        .replace(/^[\d\s\/\-\.]+/, "")
-        // Remove number+unit combos (e.g. "2 cups", "1.5 lbs")
-        .replace(/\b\d+(\.\d+)?\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|lbs?|oz|pounds?|ounces?|fl\s*oz|quarts?|gallons?|ml|liters?|inch|inches|cm|pinch(es)?|dash(es)?|can|cans|pkg|package|bag|bottle|jar)\b/gi, "")
-        // Remove standalone count/form words (e.g. "cloves", "stalks", "heads")
-        .replace(/\b(cloves?|heads?|stalks?|bunche?s?|pieces?|sticks?|slices?|fillets?|breasts?|thighs?|legs?|sprigs?|sheets?|strips?|cubes?|wedges?|ears?|ribs?)\b/gi, "")
-        // Remove size/prep qualifiers
-        .replace(/\b(fresh|organic|large|medium|small|jumbo|whole|half|ground|minced|dried|frozen|raw|pure|extra|virgin|boneless|skinless|thin|thick|fine|coarse|chopped|diced|sliced|shredded|grated|crushed|peeled|deveined|trimmed|packed|loosely|firmly|divided|optional|to taste|for garnish|as needed|about|approximately|roughly|ripe|uncooked|cooked|softened|melted|room temperature|cold|warm|hot)\b/gi, "")
-        // Remove parentheticals
-        .replace(/\(.*?\)/g, "")
-        // Remove leftover numbers
-        .replace(/\b\d+(\.\d+|\/\d+)?\b/g, "")
-        // Collapse whitespace, commas, hyphens
-        .replace(/[,\-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      const searchTerm = cleanTerm || q;
+      const searchTerm = cleanSearchTerm(q) || q;
       const token = await getKrogerToken();
-      let apiUrl = `https://api-ce.kroger.com/v1/products?filter.term=${encodeURIComponent(searchTerm)}&filter.limit=10`;
-      if (locationId) apiUrl += `&filter.locationId=${encodeURIComponent(locationId)}`;
-      const res = await fetch(apiUrl, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      });
-      if (!res.ok) {
-        const t = await res.text();
-        console.error("Kroger products error:", res.status, t);
-        throw new Error(`Kroger products failed: ${res.status}`);
+      console.log(`Kroger search: "${q}" -> "${searchTerm}"`);
+
+      // Primary search
+      let rawItems = await searchProducts(token, searchTerm, locationId);
+      let candidates = scoreProducts(rawItems, searchTerm).filter((p: any) => p._relevance >= 5);
+
+      // Fallback: if no good results, try simplified terms
+      if (candidates.length === 0) {
+        const fallbacks = getFallbackTerms(searchTerm);
+        for (const fb of fallbacks) {
+          console.log(`Kroger fallback search: "${fb}"`);
+          rawItems = await searchProducts(token, fb, locationId);
+          candidates = scoreProducts(rawItems, fb).filter((p: any) => p._relevance >= 3);
+          if (candidates.length > 0) break;
+        }
       }
-      const data = await res.json();
 
-      // Score products by relevance, then pick the CHEAPEST relevant ones
-      const searchLower = searchTerm.toLowerCase();
-      const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 1);
-
-      const candidates = (data.data || []).map((p: any) => {
-        const item = p.items?.[0];
-        const desc = (p.description || "").toLowerCase();
-        const cat = ((p.categories || []) as string[]).join(" ").toLowerCase();
-
-        let relevance = 0;
-
-        // Exact match boost
-        if (desc.includes(searchLower)) relevance += 15;
-
-        // Keyword match — ALL keywords must appear for strong relevance
-        let kwMatches = 0;
-        for (const kw of keywords) {
-          if (desc.includes(kw)) { relevance += 3; kwMatches++; }
-          else if (cat.includes(kw)) { relevance += 1; kwMatches++; }
-        }
-        // Bonus if ALL keywords match
-        if (keywords.length > 0 && kwMatches === keywords.length) relevance += 5;
-
-        // Penalize non-grocery items
-        const nonFoodTerms = ["baby food", "baby puree", "teether", "formula", "cleaning", "detergent", "shampoo", "soap", "lotion", "diaper", "pet food", "dog food", "cat food", "supplement", "vitamin"];
-        for (const nf of nonFoodTerms) {
-          if (desc.includes(nf) || cat.includes(nf)) relevance -= 10;
-        }
-        if (desc.includes("baby") && !searchLower.includes("baby")) relevance -= 5;
-
-        // Penalize products that are clearly a different category
-        // e.g., "almonds" when searching "soy sauce", "spread" when searching "oil"
-        const descWords = desc.split(/\s+/);
-        const searchWords = new Set(searchLower.split(/\s+/));
-        const extraWords = descWords.filter((w: string) => w.length > 3 && !searchWords.has(w));
-        // If most of the product name is unrelated words, penalize
-        if (extraWords.length > descWords.length * 0.6) relevance -= 3;
-
-        const price = item?.price?.promo ?? item?.price?.regular ?? null;
-        const isAvailable = !!(price || item?.fulfillment?.inStore || p.productId);
-
-        return {
-          productId: p.productId,
-          name: p.description,
-          brand: p.brand,
-          size: item?.size || "",
-          price,
-          available: isAvailable,
-          _relevance: relevance,
-        };
-      })
-      // Must have minimum relevance
-      .filter((p: any) => p._relevance >= 5);
-
-      // Sort: priced items first by cheapest, then unpriced items by relevance
+      // Sort: priced items first by cheapest
       candidates.sort((a: any, b: any) => {
         const aHasPrice = a.price != null && a.price > 0;
         const bHasPrice = b.price != null && b.price > 0;
