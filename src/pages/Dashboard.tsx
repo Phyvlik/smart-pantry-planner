@@ -1,20 +1,9 @@
 import { Link } from "react-router-dom";
-import { ChefHat, ShoppingCart, MapPin, Edit2 } from "lucide-react";
+import { ChefHat, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useState } from "react";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
-  const [address, setAddress] = useState("123 Main Street, Anytown, USA 12345");
-  const [isEditing, setIsEditing] = useState(false);
-  const [newAddress, setNewAddress] = useState(address);
-
-  const handleSave = () => {
-    setAddress(newAddress);
-    setIsEditing(false);
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-background">
       {/* Header */}
@@ -29,38 +18,6 @@ export default function Dashboard() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-3xl sm:text-4xl font-serif font-bold mb-2">Hey there, Chef! 👋</h1>
           <p className="text-muted-foreground mb-10">What are we making today?</p>
-        </motion.div>
-
-        {/* Address */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="glass-card p-5 mb-8"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-secondary" />
-              <span className="font-medium text-sm">Your Location</span>
-            </div>
-            {!isEditing && (
-              <Button onClick={() => setIsEditing(true)} variant="ghost" size="sm" className="text-muted-foreground">
-                <Edit2 className="w-3.5 h-3.5 mr-1" /> Edit
-              </Button>
-            )}
-          </div>
-          {isEditing ? (
-            <div className="mt-3 flex items-center gap-2">
-              <Input
-                value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
-                className="flex-grow"
-              />
-              <Button onClick={handleSave} size="sm" className="bg-gradient-hero">Save</Button>
-            </div>
-          ) : (
-            <p className="mt-1 text-sm text-muted-foreground">{address}</p>
-          )}
         </motion.div>
 
         {/* Action Cards */}
