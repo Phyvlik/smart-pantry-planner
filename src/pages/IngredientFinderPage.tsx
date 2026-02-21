@@ -133,6 +133,21 @@ export default function IngredientFinderPage() {
           {step === "ingredients" && (
             <motion.div key="ingredients" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
               <div className="glass-card p-6">
+                <h3 className="font-serif font-semibold mb-3 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-secondary" /> Where are you shopping?
+                </h3>
+                <div className="flex gap-3">
+                  <Input
+                    value={zip}
+                    onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                    placeholder="ZIP code"
+                    className="max-w-[160px] rounded-xl"
+                    maxLength={5}
+                  />
+                </div>
+              </div>
+
+              <div className="glass-card p-6">
                 <h3 className="font-serif font-semibold mb-4">What do you need to buy?</h3>
                 <div className="grid gap-2">
                   {recipe.ingredients.map((ing, i) => {
@@ -160,32 +175,18 @@ export default function IngredientFinderPage() {
                     );
                   })}
                 </div>
-              </div>
-
-              <div className="glass-card p-6">
-                <h3 className="font-serif font-semibold mb-3 flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-secondary" /> Find stores near you
-                </h3>
-                <div className="flex gap-3">
-                  <Input
-                    value={zip}
-                    onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                    placeholder="ZIP code"
-                    className="max-w-[160px] rounded-xl"
-                    maxLength={5}
-                  />
-                  <Button
-                    onClick={searchStores}
-                    disabled={isSearchingStores || zip.length !== 5 || missingIngredients.length === 0}
-                    className="bg-gradient-hero rounded-xl"
-                  >
-                    {isSearchingStores ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Searching...</> : <><Search className="w-4 h-4 mr-2" /> Find Stores</>}
-                  </Button>
-                </div>
                 {missingIngredients.length === 0 && (
                   <p className="text-xs text-success mt-3">✅ You have everything! Go back and start cooking.</p>
                 )}
               </div>
+
+              <Button
+                onClick={searchStores}
+                disabled={isSearchingStores || zip.length !== 5 || missingIngredients.length === 0}
+                className="w-full bg-gradient-hero rounded-xl h-12 text-base"
+              >
+                {isSearchingStores ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Searching...</> : <><Search className="w-4 h-4 mr-2" /> Find Stores Near Me</>}
+              </Button>
             </motion.div>
           )}
 
