@@ -58,7 +58,7 @@ serve(async (req) => {
 
     // Score, filter and pick the MOST AFFORDABLE relevant matches
     const searchLower = searchTerm.toLowerCase();
-    const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 2);
+    const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 1);
 
     const candidates = organicResults
       .map((item: any) => {
@@ -66,12 +66,33 @@ serve(async (req) => {
         const price = item.primary_offer?.offer_price ?? item.price ?? null;
         const numPrice = typeof price === "number" ? price : (typeof price === "string" ? parseFloat(price) : null);
 
-        // Relevance: must match at least one keyword
+        // Relevance: must match keywords well
         let relevance = 0;
-        if (title.includes(searchLower)) relevance += 10;
+        if (title.includes(searchLower)) relevance += 15;
+        
+        let kwMatches = 0;
         for (const kw of keywords) {
-          if (title.includes(kw)) relevance += 3;
+          if (title.includes(kw)) { relevance += 3; kwMatches++; }
         }
+        // Bonus if ALL keywords match
+        if (keywords.length > 0 && kwMatches === keywords.length) relevance += 5;
+
+        // Penalize specialty/bulk/dried versions when searching for fresh items
+        const freshTerms = ["fresh", "produce", "each", "bunch", "bulb"];
+        const specialtyTerms = ["powder", "dehydrated", "dried", "freeze-dried", "supplement", "extract", "capsule", "pill", "spice lab", "seasoning mix"];
+        const isFreshSearch = !searchLower.includes("powder") && !searchLower.includes("dried") && !searchLower.includes("spice");
+        
+        if (isFreshSearch) {
+          for (const st of specialtyTerms) {
+            if (title.includes(st)) relevance -= 8;
+          }
+          for (const ft of freshTerms) {
+            if (title.includes(ft)) relevance += 2;
+          }
+        }
+
+        // Penalize very expensive items (likely specialty/bulk)
+        if (numPrice != null && numPrice > 6) relevance -= 3;
 
         return {
           productId: item.us_item_id || item.product_id || String(Math.random()),
@@ -85,7 +106,7 @@ serve(async (req) => {
         };
       })
       // Only keep relevant results with a valid price
-      .filter((p: any) => p._relevance >= 3 && p.price != null && p.price > 0);
+      .filter((p: any) => p._relevance >= 5 && p.price != null && p.price > 0);
 
     // Sort by cheapest price first (affordability is king)
     candidates.sort((a: any, b: any) => a.price - b.price);
