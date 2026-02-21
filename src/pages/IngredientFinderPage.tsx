@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store } from "lucide-react";
+import { ShoppingCart, ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,12 +28,6 @@ interface KrogerProduct {
   available: boolean | null;
 }
 
-interface StoreResults {
-  location: KrogerLocation;
-  products: Record<string, KrogerProduct[]>; // ingredientName -> products
-  isLoading: boolean;
-}
-
 async function krogerFetch(action: string, params: Record<string, string> = {}) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/kroger-api`, {
     method: "POST",
@@ -51,19 +45,22 @@ async function krogerFetch(action: string, params: Record<string, string> = {}) 
   return res.json();
 }
 
+type Step = "ingredients" | "stores" | "prices";
+
 export default function IngredientFinderPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const recipe = location.state?.recipe as Recipe | undefined;
 
+  const [step, setStep] = useState<Step>("ingredients");
   const [zip, setZip] = useState("");
   const [locations, setLocations] = useState<KrogerLocation[]>([]);
-  const [storeResults, setStoreResults] = useState<StoreResults[]>([]);
+  const [selectedStore, setSelectedStore] = useState<KrogerLocation | null>(null);
+  const [products, setProducts] = useState<Record<string, KrogerProduct[]>>({});
   const [isSearchingStores, setIsSearchingStores] = useState(false);
+  const [isLoadingPrices, setIsLoadingPrices] = useState(false);
   const [missingIngredients, setMissingIngredients] = useState<string[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
 
-  // Initialize all ingredients as missing
   useEffect(() => {
     if (recipe) {
       setMissingIngredients(recipe.ingredients.map((i) => i.name));
@@ -85,51 +82,15 @@ export default function IngredientFinderPage() {
       toast.error("No missing ingredients selected.");
       return;
     }
-
     setIsSearchingStores(true);
-    setHasSearched(true);
-    setStoreResults([]);
-
     try {
       const { locations: locs } = await krogerFetch("locations", { zip });
       if (!locs || locs.length === 0) {
         toast.error("No stores found near that ZIP code.");
-        setIsSearchingStores(false);
         return;
       }
       setLocations(locs);
-
-      // Initialize store results with loading state
-      const initial: StoreResults[] = locs.map((loc: KrogerLocation) => ({
-        location: loc,
-        products: {},
-        isLoading: true,
-      }));
-      setStoreResults(initial);
-
-      // Fetch products for each store in parallel
-      await Promise.all(
-        locs.map(async (loc: KrogerLocation, idx: number) => {
-          const products: Record<string, KrogerProduct[]> = {};
-          // Fetch ingredients sequentially per store to avoid rate limiting
-          for (const ing of missingIngredients) {
-            try {
-              const { products: prods } = await krogerFetch("products", {
-                q: ing,
-                locationId: loc.locationId,
-              });
-              products[ing] = prods || [];
-            } catch {
-              products[ing] = [];
-            }
-          }
-          setStoreResults((prev) => {
-            const updated = [...prev];
-            updated[idx] = { ...updated[idx], products, isLoading: false };
-            return updated;
-          });
-        })
-      );
+      setStep("stores");
     } catch (err: any) {
       console.error("Store search error:", err);
       toast.error(err.message || "Failed to search stores.");
@@ -138,13 +99,39 @@ export default function IngredientFinderPage() {
     }
   }, [zip, missingIngredients]);
 
-  const handleBuyFromStore = (storeName: string) => {
-    // Save to localStorage for session persistence
-    localStorage.setItem(
-      "smartcart_selected_store",
-      JSON.stringify({ storeName, ingredients: missingIngredients })
-    );
-    navigate("/cook", { state: { recipe, fromStore: storeName } });
+  const selectStore = useCallback(async (store: KrogerLocation) => {
+    setSelectedStore(store);
+    setStep("prices");
+    setIsLoadingPrices(true);
+    setProducts({});
+
+    try {
+      for (const ing of missingIngredients) {
+        try {
+          const { products: prods } = await krogerFetch("products", {
+            q: ing,
+            locationId: store.locationId,
+          });
+          setProducts((prev) => ({ ...prev, [ing]: prods || [] }));
+        } catch {
+          setProducts((prev) => ({ ...prev, [ing]: [] }));
+        }
+      }
+    } catch (err: any) {
+      toast.error("Failed to load prices.");
+    } finally {
+      setIsLoadingPrices(false);
+    }
+  }, [missingIngredients]);
+
+  const handleBuyFromStore = () => {
+    if (selectedStore && recipe) {
+      localStorage.setItem(
+        "smartcart_selected_store",
+        JSON.stringify({ storeName: selectedStore.name, ingredients: missingIngredients })
+      );
+      navigate("/cook", { state: { recipe, fromStore: selectedStore.name } });
+    }
   };
 
   if (!recipe) {
@@ -166,6 +153,23 @@ export default function IngredientFinderPage() {
     );
   }
 
+  // Helper to get best product for an ingredient
+  const getBestProduct = (ingName: string) => {
+    const prods = products[ingName] || [];
+    return prods.find((p) => p.available === true && p.price != null)
+      || prods.find((p) => p.available === true)
+      || prods.find((p) => p.price != null)
+      || prods[0] || null;
+  };
+
+  // Calculate total for loaded products
+  const loadedIngredients = Object.keys(products);
+  const totalPrice = missingIngredients.reduce((sum, ing) => {
+    const best = getBestProduct(ing);
+    return sum + (best?.price ?? 0);
+  }, 0);
+  const availableCount = missingIngredients.filter((ing) => getBestProduct(ing)?.available === true).length;
+
   return (
     <div className="flex flex-col min-h-screen">
       <header className="flex items-center px-4 lg:px-6 h-14 bg-primary">
@@ -176,175 +180,217 @@ export default function IngredientFinderPage() {
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
-        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
+        <button onClick={() => {
+          if (step === "prices") { setStep("stores"); setProducts({}); }
+          else if (step === "stores") { setStep("ingredients"); setLocations([]); }
+          else navigate(-1);
+        }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
         <h1 className="text-3xl font-bold font-serif mb-2 text-center">Ingredient Finder</h1>
-        <p className="text-muted-foreground text-center mb-2">
+        <p className="text-muted-foreground text-center mb-6">
           Finding ingredients for <span className="font-semibold text-foreground">{recipe.name}</span>
         </p>
 
-        {/* Missing ingredients toggle */}
-        <div className="glass-card rounded-2xl p-5 mb-6">
-          <h3 className="font-serif font-semibold mb-3">Select missing ingredients</h3>
-          <div className="grid gap-2">
-            {recipe.ingredients.map((ing, i) => {
-              const isMissing = missingIngredients.includes(ing.name);
-              return (
-                <button
-                  key={i}
-                  onClick={() => toggleIngredient(ing.name)}
-                  className={`flex items-center justify-between p-3 rounded-lg text-sm transition-colors text-left ${
-                    isMissing ? "bg-destructive/10 border border-destructive/20" : "bg-muted/50 border border-transparent"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {isMissing ? (
-                      <XCircle className="w-4 h-4 text-destructive shrink-0" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                    )}
-                    <span>{ing.amount} {ing.name}</span>
-                  </div>
-                  <Badge variant={isMissing ? "destructive" : "outline"} className="text-xs">
-                    {isMissing ? "Missing" : "Have it"}
-                  </Badge>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ZIP code search */}
-        <div className="glass-card rounded-2xl p-5 mb-6">
-          <h3 className="font-serif font-semibold mb-3 flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-primary" /> Find Nearby Stores
-          </h3>
-          <div className="flex gap-2">
-            <Input
-              value={zip}
-              onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
-              placeholder="Enter ZIP code"
-              className="max-w-[180px]"
-              maxLength={5}
-            />
-            <Button
-              onClick={searchStores}
-              disabled={isSearchingStores || zip.length !== 5 || missingIngredients.length === 0}
-              className="bg-gradient-hero"
-            >
-              {isSearchingStores ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Searching...</>
-              ) : (
-                <><Search className="w-4 h-4 mr-2" /> Search Stores</>
-              )}
-            </Button>
-          </div>
-          {missingIngredients.length === 0 && (
-            <p className="text-xs text-success mt-2">You have all ingredients! Go back and start cooking.</p>
-          )}
-        </div>
-
-        {/* Store results */}
-        <AnimatePresence>
-          {storeResults.length > 0 && (
-            <div className="space-y-4">
-              {storeResults.map((sr, idx) => (
-                <motion.div
-                  key={sr.location.locationId}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.08 }}
-                  className="glass-card rounded-2xl overflow-hidden"
-                >
-                  {/* Store header */}
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Store className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="font-semibold">{sr.location.name}</div>
-                        <div className="text-xs text-muted-foreground">{sr.location.address}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Products per ingredient */}
-                  <div className="px-4 pb-2">
-                    {sr.isLoading ? (
-                      <div className="space-y-3 py-2">
-                        {missingIngredients.map((ing) => (
-                          <div key={ing} className="flex items-center gap-3">
-                            <Skeleton className="h-4 w-4 rounded-full" />
-                            <Skeleton className="h-4 flex-1" />
-                            <Skeleton className="h-4 w-16" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="grid gap-1">
-                        {missingIngredients.map((ingName) => {
-                          const prods = sr.products[ingName] || [];
-                          // Pick best product: prefer available with price, then available, then any with price
-                          const bestProduct = prods.find((p) => p.available === true && p.price != null)
-                            || prods.find((p) => p.available === true)
-                            || prods.find((p) => p.price != null)
-                            || prods[0];
-                          const isAvailable = bestProduct?.available === true;
-                          const hasProduct = !!bestProduct;
-
-                          return (
-                            <div key={ingName} className="flex items-center justify-between py-1.5 px-2 text-sm">
-                              <div className="flex items-center gap-2 min-w-0">
-                                {isAvailable ? (
-                                  <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                                ) : hasProduct ? (
-                                  <XCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                                ) : (
-                                  <XCircle className="w-4 h-4 text-destructive shrink-0" />
-                                )}
-                                <span className={!isAvailable ? "text-muted-foreground" : ""}>
-                                  {ingName}
-                                </span>
-                                {bestProduct && (
-                                  <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                    — {bestProduct.name}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-muted-foreground font-medium shrink-0 ml-2">
-                                {bestProduct?.price != null ? `$${bestProduct.price.toFixed(2)}` : isAvailable ? "In stock" : hasProduct ? "Unavailable" : "Not found"}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Buy button */}
-                  {!sr.isLoading && (
-                    <div className="px-4 pb-4">
-                      <Button
-                        onClick={() => handleBuyFromStore(sr.location.name)}
-                        className="w-full bg-gradient-hero"
+        <AnimatePresence mode="wait">
+          {/* Step 1: Select missing ingredients + ZIP */}
+          {step === "ingredients" && (
+            <motion.div key="ingredients" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              <div className="glass-card rounded-2xl p-5 mb-6">
+                <h3 className="font-serif font-semibold mb-3">Select missing ingredients</h3>
+                <div className="grid gap-2">
+                  {recipe.ingredients.map((ing, i) => {
+                    const isMissing = missingIngredients.includes(ing.name);
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => toggleIngredient(ing.name)}
+                        className={`flex items-center justify-between p-3 rounded-lg text-sm transition-colors text-left ${
+                          isMissing ? "bg-destructive/10 border border-destructive/20" : "bg-muted/50 border border-transparent"
+                        }`}
                       >
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                        Buy & Start Cooking
-                      </Button>
+                        <div className="flex items-center gap-2">
+                          {isMissing ? (
+                            <XCircle className="w-4 h-4 text-destructive shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                          )}
+                          <span>{ing.amount} {ing.name}</span>
+                        </div>
+                        <Badge variant={isMissing ? "destructive" : "outline"} className="text-xs">
+                          {isMissing ? "Missing" : "Have it"}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="glass-card rounded-2xl p-5">
+                <h3 className="font-serif font-semibold mb-3 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" /> Find Nearby Stores
+                </h3>
+                <div className="flex gap-2">
+                  <Input
+                    value={zip}
+                    onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                    placeholder="Enter ZIP code"
+                    className="max-w-[180px]"
+                    maxLength={5}
+                  />
+                  <Button
+                    onClick={searchStores}
+                    disabled={isSearchingStores || zip.length !== 5 || missingIngredients.length === 0}
+                    className="bg-gradient-hero"
+                  >
+                    {isSearchingStores ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Searching...</>
+                    ) : (
+                      <><Search className="w-4 h-4 mr-2" /> Search Stores</>
+                    )}
+                  </Button>
+                </div>
+                {missingIngredients.length === 0 && (
+                  <p className="text-xs text-success mt-2">You have all ingredients! Go back and start cooking.</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 2: Pick a store */}
+          {step === "stores" && (
+            <motion.div key="stores" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              <p className="text-sm text-muted-foreground text-center mb-4">
+                {locations.length} stores found near {zip}. Select a store to check prices.
+              </p>
+              <div className="space-y-3">
+                {locations.map((loc, idx) => (
+                  <motion.button
+                    key={loc.locationId}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.06 }}
+                    onClick={() => selectStore(loc)}
+                    className="w-full glass-card rounded-2xl p-4 flex items-center gap-4 text-left hover:ring-2 hover:ring-primary/40 transition-all"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <Store className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold">{loc.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">{loc.address}</div>
+                      <Badge variant="outline" className="text-xs mt-1">{loc.chain}</Badge>
+                    </div>
+                    <div className="flex items-center gap-1 text-primary font-medium text-sm shrink-0">
+                      <DollarSign className="w-4 h-4" /> Check Prices
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 3: Show prices for selected store */}
+          {step === "prices" && selectedStore && (
+            <motion.div key="prices" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              <div className="glass-card rounded-2xl overflow-hidden mb-6">
+                {/* Store header */}
+                <div className="p-4 flex items-center gap-3 border-b border-border">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Store className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <div className="font-semibold">{selectedStore.name}</div>
+                    <div className="text-xs text-muted-foreground">{selectedStore.address}</div>
+                  </div>
+                </div>
+
+                {/* Ingredient prices */}
+                <div className="p-4">
+                  <h3 className="font-serif font-semibold mb-3 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-primary" /> Ingredient Prices
+                  </h3>
+                  <div className="grid gap-2">
+                    {missingIngredients.map((ingName) => {
+                      const loaded = ingName in products;
+                      const best = getBestProduct(ingName);
+                      const isAvailable = best?.available === true;
+
+                      return (
+                        <div key={ingName} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {!loaded ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
+                            ) : isAvailable ? (
+                              <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-destructive shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <span className={`text-sm ${!loaded ? "text-muted-foreground" : isAvailable ? "" : "text-muted-foreground"}`}>
+                                {ingName}
+                              </span>
+                              {best && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {best.name} {best.size ? `· ${best.size}` : ""}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 ml-3">
+                            {!loaded ? (
+                              <Skeleton className="h-5 w-14" />
+                            ) : best?.price != null ? (
+                              <span className="font-semibold text-sm">${best.price.toFixed(2)}</span>
+                            ) : isAvailable ? (
+                              <Badge variant="outline" className="text-xs">In stock</Badge>
+                            ) : (
+                              <span className="text-xs text-destructive">Unavailable</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Total */}
+                  {!isLoadingPrices && (
+                    <div className="mt-4 pt-3 border-t border-border">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-semibold">Estimated Total</span>
+                        <span className="font-bold text-lg">{totalPrice > 0 ? `$${totalPrice.toFixed(2)}` : "—"}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {availableCount} of {missingIngredients.length} ingredients available at this store
+                      </p>
                     </div>
                   )}
-                </motion.div>
-              ))}
-            </div>
+                </div>
+
+                {/* Buy button */}
+                {!isLoadingPrices && (
+                  <div className="px-4 pb-4">
+                    <Button
+                      onClick={handleBuyFromStore}
+                      className="w-full bg-gradient-hero"
+                    >
+                      <ShoppingCart className="w-4 h-4 mr-2" />
+                      Buy & Start Cooking
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => { setStep("stores"); setProducts({}); }}
+                className="block mx-auto text-sm text-muted-foreground hover:text-foreground"
+              >
+                ← Try a different store
+              </button>
+            </motion.div>
           )}
         </AnimatePresence>
-
-        {hasSearched && !isSearchingStores && storeResults.length === 0 && (
-          <p className="text-center text-muted-foreground mt-8">No stores found. Try a different ZIP code.</p>
-        )}
 
         <p className="text-xs text-muted-foreground mt-6 text-center">
           Powered by Kroger Product API. Prices and availability may vary.
