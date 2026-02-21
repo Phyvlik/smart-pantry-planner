@@ -318,37 +318,43 @@ export default function IngredientFinderPage() {
                       const isAvailable = best?.available === true;
 
                       return (
-                        <div key={ingName} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            {!loaded ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
-                            ) : isAvailable ? (
-                              <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-destructive shrink-0" />
-                            )}
-                            <div className="min-w-0">
-                              <span className={`text-sm ${!loaded ? "text-muted-foreground" : isAvailable ? "" : "text-muted-foreground"}`}>
-                                {ingName}
-                              </span>
-                              {best && (
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {best.name} {best.size ? `· ${best.size}` : ""}
-                                </p>
+                        <div key={ingName} className="py-2 px-3 rounded-lg bg-muted/30">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {!loaded ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
+                              ) : isAvailable || (best?.price != null) ? (
+                                <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-destructive shrink-0" />
+                              )}
+                              <div className="min-w-0">
+                                <span className={`text-sm ${!loaded ? "text-muted-foreground" : (isAvailable || best?.price != null) ? "" : "text-muted-foreground"}`}>
+                                  {ingName}
+                                </span>
+                                {best && (
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {best.name} {best.size ? `· ${best.size}` : ""}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 ml-3">
+                              {!loaded ? (
+                                <Skeleton className="h-5 w-14" />
+                              ) : best?.price != null ? (
+                                <span className="font-semibold text-sm">${best.price.toFixed(2)}</span>
+                              ) : (
+                                <span className="text-xs text-destructive">Unavailable</span>
                               )}
                             </div>
                           </div>
-                          <div className="text-right shrink-0 ml-3">
-                            {!loaded ? (
-                              <Skeleton className="h-5 w-14" />
-                            ) : best?.price != null ? (
-                              <span className="font-semibold text-sm">${best.price.toFixed(2)}</span>
-                            ) : isAvailable ? (
-                              <Badge variant="outline" className="text-xs">In stock</Badge>
-                            ) : (
-                              <span className="text-xs text-destructive">Unavailable</span>
-                            )}
-                          </div>
+                          {/* Suggestion for unavailable items */}
+                          {loaded && !isAvailable && best?.price == null && (
+                            <p className="text-xs text-muted-foreground mt-1 ml-6 italic">
+                              💡 Try substituting with a similar ingredient or check another store
+                            </p>
+                          )}
                         </div>
                       );
                     })}
