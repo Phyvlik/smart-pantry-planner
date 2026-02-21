@@ -90,23 +90,27 @@ interface StorePricesPanelProps {
 }
 
 export function StorePricesPanel({ recipe, missingIngredients, selectedStore, onBuy, onBack }: StorePricesPanelProps) {
+  const isWalmartStore = selectedStore.chain === "WALMART";
   const [krogerData, setKrogerData] = useState<Record<string, StoreProduct[]>>({});
   const [walmartData, setWalmartData] = useState<Record<string, StoreProduct[]>>({});
-  const [isLoadingKroger, setIsLoadingKroger] = useState(true);
+  const [isLoadingKroger, setIsLoadingKroger] = useState(!isWalmartStore);
   const [isLoadingWalmart, setIsLoadingWalmart] = useState(true);
 
   const hasStarted = useState(false);
   if (!hasStarted[0]) {
     hasStarted[1](true);
-    (async () => {
-      for (const ing of missingIngredients) {
-        try {
-          const { products } = await apiFetch("kroger-api", { action: "products", q: ing, locationId: selectedStore.locationId });
-          setKrogerData((prev) => ({ ...prev, [ing]: products || [] }));
-        } catch { setKrogerData((prev) => ({ ...prev, [ing]: [] })); }
-      }
-      setIsLoadingKroger(false);
-    })();
+    // Only fetch Kroger if a Kroger-family store was selected
+    if (!isWalmartStore) {
+      (async () => {
+        for (const ing of missingIngredients) {
+          try {
+            const { products } = await apiFetch("kroger-api", { action: "products", q: ing, locationId: selectedStore.locationId });
+            setKrogerData((prev) => ({ ...prev, [ing]: products || [] }));
+          } catch { setKrogerData((prev) => ({ ...prev, [ing]: [] })); }
+        }
+        setIsLoadingKroger(false);
+      })();
+    }
     (async () => {
       for (const ing of missingIngredients) {
         try {
@@ -134,8 +138,10 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
   const krogerStoreTotal = calcStoreTotal(krogerData);
   const walmartStoreTotal = calcStoreTotal(walmartData);
   const bothLoaded = !isLoadingKroger && !isLoadingWalmart;
-  const krogerCheaper = bothLoaded && krogerStoreTotal <= walmartStoreTotal;
-  const walmartCheaper = bothLoaded && walmartStoreTotal < krogerStoreTotal;
+  const showComparison = !isWalmartStore && bothLoaded;
+  const krogerCheaper = showComparison && krogerStoreTotal <= walmartStoreTotal;
+  const walmartCheaper = showComparison && walmartStoreTotal < krogerStoreTotal;
+  const storeName = isWalmartStore ? "Walmart" : selectedStore.name.split("–")[0].trim();
 
   const renderIngredientList = (
     storeProducts: Record<string, StoreProduct[]>,
@@ -220,8 +226,8 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
 
   return (
     <motion.div key="prices" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-5">
-      {/* Summary comparison */}
-      {bothLoaded && (
+      {/* Summary comparison — only when comparing two stores */}
+      {showComparison && (
         <div className="glass-card p-5">
           <h3 className="font-serif font-semibold mb-4 flex items-center gap-2">
             <TrendingDown className="w-5 h-5 text-primary" /> Price Comparison
@@ -229,7 +235,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
           <div className="grid grid-cols-2 gap-4">
             <div className={`p-4 rounded-2xl text-center transition-all ${krogerCheaper ? "bg-success/10 ring-2 ring-success/30" : "bg-muted/50"}`}>
               <span className="text-3xl">🟡</span>
-              <p className="font-medium text-sm mt-2">{selectedStore.name.split("–")[0].trim()}</p>
+              <p className="font-medium text-sm mt-2">{storeName}</p>
               <p className={`font-bold text-xl mt-1 ${krogerCheaper ? "text-success" : ""}`}>
                 ${krogerStoreTotal.toFixed(2)}
               </p>
@@ -251,45 +257,20 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
           {Math.abs(krogerStoreTotal - walmartStoreTotal) > 0.01 && (
             <p className="text-sm text-center text-muted-foreground mt-3">
               Save <span className="font-semibold text-success">${Math.abs(krogerStoreTotal - walmartStoreTotal).toFixed(2)}</span> at{" "}
-              <span className="font-semibold">{krogerCheaper ? selectedStore.name.split("–")[0].trim() : "Walmart"}</span>
+              <span className="font-semibold">{krogerCheaper ? storeName : "Walmart"}</span>
             </p>
           )}
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Content */}
       <div className="glass-card overflow-hidden">
-        <Tabs defaultValue="kroger" className="w-full">
-          <div className="px-5 pt-5">
-            <TabsList className="w-full rounded-xl">
-              <TabsTrigger value="kroger" className="flex-1 gap-2 rounded-lg">
-                🟡 {selectedStore.name.split("–")[0].trim()}
-                {!isLoadingKroger && <span className="text-xs opacity-70">${krogerStoreTotal.toFixed(2)}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="walmart" className="flex-1 gap-2 rounded-lg">
-                🔵 Walmart
-                {!isLoadingWalmart && <span className="text-xs opacity-70">${walmartStoreTotal.toFixed(2)}</span>}
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="kroger" className="p-5">
+        {isWalmartStore ? (
+          /* Walmart-only view */
+          <div className="p-5">
             <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Store className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <div className="font-semibold text-sm">{selectedStore.name}</div>
-                <div className="text-xs text-muted-foreground">{selectedStore.address}</div>
-              </div>
-            </div>
-            {renderIngredientList(krogerData, isLoadingKroger)}
-          </TabsContent>
-
-          <TabsContent value="walmart" className="p-5">
-            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-              <div className="w-11 h-11 rounded-xl bg-secondary/10 flex items-center justify-center">
-                <Store className="w-5 h-5 text-secondary" />
+              <div className="w-11 h-11 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                <span className="text-xl">🔵</span>
               </div>
               <div>
                 <div className="font-semibold text-sm">Walmart</div>
@@ -297,10 +278,52 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
               </div>
             </div>
             {renderIngredientList(walmartData, isLoadingWalmart)}
-          </TabsContent>
-        </Tabs>
+          </div>
+        ) : (
+          /* Comparison tabs for Kroger-family stores */
+          <Tabs defaultValue="kroger" className="w-full">
+            <div className="px-5 pt-5">
+              <TabsList className="w-full rounded-xl">
+                <TabsTrigger value="kroger" className="flex-1 gap-2 rounded-lg">
+                  🟡 {storeName}
+                  {!isLoadingKroger && <span className="text-xs opacity-70">${krogerStoreTotal.toFixed(2)}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="walmart" className="flex-1 gap-2 rounded-lg">
+                  🔵 Walmart
+                  {!isLoadingWalmart && <span className="text-xs opacity-70">${walmartStoreTotal.toFixed(2)}</span>}
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-        {!isLoadingKroger && !isLoadingWalmart && (
+            <TabsContent value="kroger" className="p-5">
+              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+                <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Store className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="font-semibold text-sm">{selectedStore.name}</div>
+                  <div className="text-xs text-muted-foreground">{selectedStore.address}</div>
+                </div>
+              </div>
+              {renderIngredientList(krogerData, isLoadingKroger)}
+            </TabsContent>
+
+            <TabsContent value="walmart" className="p-5">
+              <div className="flex items-center gap-3 mb-4 pb-3 border-b border-border">
+                <div className="w-11 h-11 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <span className="text-xl">🔵</span>
+                </div>
+                <div>
+                  <div className="font-semibold text-sm">Walmart</div>
+                  <div className="text-xs text-muted-foreground">Online prices · walmart.com</div>
+                </div>
+              </div>
+              {renderIngredientList(walmartData, isLoadingWalmart)}
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {((isWalmartStore && !isLoadingWalmart) || (!isWalmartStore && !isLoadingKroger && !isLoadingWalmart)) && (
           <div className="px-5 pb-5">
             <Button onClick={onBuy} className="w-full bg-gradient-hero rounded-xl h-12 text-base">
               <ShoppingCart className="w-5 h-5 mr-2" />
