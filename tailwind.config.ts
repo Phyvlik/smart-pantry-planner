@@ -59,6 +59,10 @@ export default {
           DEFAULT: "hsl(var(--savings))",
           foreground: "hsl(var(--savings-foreground))",
         },
+        terracotta: "hsl(var(--terracotta))",
+        olive: "hsl(var(--olive))",
+        cream: "hsl(var(--cream))",
+        charcoal: "hsl(var(--charcoal))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import type { Recipe } from "@/components/RecipeCard";
 
 interface CookModeProps {
@@ -31,12 +32,8 @@ const CookMode = ({ recipe }: CookModeProps) => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // ElevenLabs TTS
   const speak = useCallback(async (text: string) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setIsSpeaking(true);
     try {
       const response = await fetch(
@@ -62,63 +59,44 @@ const CookMode = ({ recipe }: CookModeProps) => {
     } catch (err) {
       console.error("Voice error:", err);
       setIsSpeaking(false);
-      toast.error("Voice narration failed. Try again.");
+      toast.error("Voice narration failed.");
     }
   }, []);
 
   const stopSpeaking = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setIsSpeaking(false);
   }, []);
 
-  // Narrate a step with Gemini-generated interactive narration + ElevenLabs voice
   const narrateStep = useCallback(async (stepIndex: number) => {
     setIsThinking(true);
     try {
       const { data, error } = await supabase.functions.invoke("smartcart-ai", {
-        body: {
-          action: "cook_step_narration",
-          recipeName: recipe.name,
-          recipeSteps: recipe.steps,
-          currentStepIndex: stepIndex,
-        },
+        body: { action: "cook_step_narration", recipeName: recipe.name, recipeSteps: recipe.steps, currentStepIndex: stepIndex },
       });
       if (error) throw error;
       const narration = data?.narration || `Step ${stepIndex + 1}: ${recipe.steps[stepIndex]}`;
       setChatMessages(prev => [...prev, { role: "assistant", text: narration }]);
       await speak(narration);
-    } catch (err) {
-      console.error("Narration error:", err);
-      // Fallback to plain step text
+    } catch {
       await speak(`Step ${stepIndex + 1}: ${recipe.steps[stepIndex]}`);
     } finally {
       setIsThinking(false);
     }
   }, [recipe, speak]);
 
-  // Ask Gemini a question, speak the response via ElevenLabs
   const askGemini = useCallback(async (userMessage: string) => {
     setChatMessages(prev => [...prev, { role: "user", text: userMessage }]);
     setIsThinking(true);
     try {
       const { data, error } = await supabase.functions.invoke("smartcart-ai", {
-        body: {
-          action: "cook_chat",
-          message: userMessage,
-          recipeName: recipe.name,
-          recipeSteps: recipe.steps,
-          currentStepIndex: currentStep,
-        },
+        body: { action: "cook_chat", message: userMessage, recipeName: recipe.name, recipeSteps: recipe.steps, currentStepIndex: currentStep },
       });
       if (error) throw error;
       const reply = data?.raw || (typeof data === "string" ? data : JSON.stringify(data));
       setChatMessages(prev => [...prev, { role: "assistant", text: reply }]);
       if (voiceEnabled) await speak(reply);
-    } catch (err: any) {
-      console.error("Chat error:", err);
+    } catch {
       setChatMessages(prev => [...prev, { role: "assistant", text: "Sorry, I couldn't process that. Try again!" }]);
       toast.error("Failed to get response");
     } finally {
@@ -126,13 +104,9 @@ const CookMode = ({ recipe }: CookModeProps) => {
     }
   }, [recipe, currentStep, speak, voiceEnabled]);
 
-  // Browser SpeechRecognition for mic input
   const startListening = useCallback(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error("Speech recognition not supported in this browser.");
-      return;
-    }
+    if (!SpeechRecognition) { toast.error("Speech recognition not supported."); return; }
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
@@ -147,29 +121,17 @@ const CookMode = ({ recipe }: CookModeProps) => {
         if (finalText) askGemini(finalText);
       }
     };
-    recognition.onerror = (event: any) => {
-      console.error("Speech error:", event.error);
-      setIsListening(false);
-      if (event.error !== "no-speech") toast.error("Microphone error. Please try again.");
-    };
+    recognition.onerror = (event: any) => { setIsListening(false); if (event.error !== "no-speech") toast.error("Mic error."); };
     recognition.onend = () => setIsListening(false);
     recognitionRef.current = recognition;
     recognition.start();
   }, [askGemini]);
 
-  const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-    setIsListening(false);
-  }, []);
+  const stopListening = useCallback(() => { recognitionRef.current?.stop(); setIsListening(false); }, []);
 
   const toggleVoice = () => {
-    if (voiceEnabled) {
-      stopSpeaking();
-      setVoiceEnabled(false);
-    } else {
-      setVoiceEnabled(true);
-      narrateStep(currentStep);
-    }
+    if (voiceEnabled) { stopSpeaking(); setVoiceEnabled(false); }
+    else { setVoiceEnabled(true); narrateStep(currentStep); }
   };
 
   const goToStep = (newStep: number) => {
@@ -177,158 +139,161 @@ const CookMode = ({ recipe }: CookModeProps) => {
     if (voiceEnabled) narrateStep(newStep);
   };
 
+  const progress = ((currentStep + 1) / recipe.steps.length) * 100;
+
   return (
-    <motion.div
-      className="glass-card rounded-2xl overflow-hidden"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      {/* Header */}
-      <div className="bg-gradient-hero p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isSpeaking ? "bg-primary-foreground/20 animate-pulse" : "bg-primary-foreground/10"}`}>
-              {isSpeaking ? <Volume2 className="w-6 h-6 text-primary-foreground" /> : <ChefHat className="w-6 h-6 text-primary-foreground" />}
-            </div>
-            <div>
-              <h4 className="font-serif font-semibold text-lg text-primary-foreground">🎙️ Cook With Me</h4>
-              <p className="text-sm text-primary-foreground/70">AI voice guides you — ask anything while cooking!</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            {isSpeaking && (
-              <Button onClick={stopSpeaking} variant="destructive" size="sm">
-                <VolumeX className="w-4 h-4 mr-1" /> Stop
-              </Button>
+    <div className="space-y-6">
+      {/* Voice Orb + Controls */}
+      <motion.div
+        className="glass-card p-8 text-center"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        {/* Voice Orb */}
+        <div className="flex justify-center mb-6">
+          <div className={`w-24 h-24 rounded-full flex items-center justify-center ${isSpeaking ? "voice-orb voice-pulse" : "bg-muted"} transition-all duration-500`}>
+            {isSpeaking ? (
+              <Volume2 className="w-10 h-10 text-secondary" />
+            ) : isListening ? (
+              <Mic className="w-10 h-10 text-secondary animate-pulse" />
+            ) : (
+              <ChefHat className="w-10 h-10 text-muted-foreground" />
             )}
-            <Button
-              onClick={toggleVoice}
-              variant={voiceEnabled ? "destructive" : "default"}
-              className={voiceEnabled ? "" : "bg-primary-foreground text-primary"}
-            >
-              {isSpeaking ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Speaking...</>
-              ) : voiceEnabled ? (
-                <><VolumeX className="w-4 h-4 mr-2" />Stop Voice</>
-              ) : (
-                <><Volume2 className="w-4 h-4 mr-2" />Start Voice</>
-              )}
-            </Button>
           </div>
         </div>
-      </div>
 
-      {/* Step content */}
-      <div className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <ChefHat className="w-5 h-5 text-primary" />
-          <span className="text-sm font-medium">Step {currentStep + 1} of {recipe.steps.length}</span>
-        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          {isSpeaking ? "I'm guiding you..." : isListening ? "Listening..." : voiceEnabled ? "Voice mode active" : "Tap to enable voice cooking"}
+        </p>
 
-        <motion.p
-          key={currentStep}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="text-lg mb-6 leading-relaxed"
-        >
-          {recipe.steps[currentStep]}
-        </motion.p>
-
-        <div className="flex flex-wrap gap-3 mb-6">
-          <Button variant="outline" disabled={currentStep === 0} onClick={() => goToStep(currentStep - 1)}>
-            Previous
+        <div className="flex flex-wrap gap-3 justify-center">
+          <Button
+            onClick={toggleVoice}
+            className={voiceEnabled ? "bg-gradient-warm rounded-full" : "bg-gradient-hero rounded-full"}
+          >
+            {isSpeaking ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Speaking...</> :
+             voiceEnabled ? <><VolumeX className="w-4 h-4 mr-2" />Stop Voice</> :
+             <><Volume2 className="w-4 h-4 mr-2" />Start Voice 🎙️</>}
           </Button>
-          <Button disabled={currentStep === recipe.steps.length - 1} onClick={() => goToStep(currentStep + 1)} className="bg-gradient-hero">
-            Next Step
-          </Button>
+
+          {isSpeaking && (
+            <Button onClick={stopSpeaking} variant="outline" className="rounded-full">
+              <VolumeX className="w-4 h-4 mr-1" /> Stop
+            </Button>
+          )}
+
           <Button
             onClick={isListening ? stopListening : startListening}
             disabled={isThinking}
             variant={isListening ? "destructive" : "outline"}
+            className="rounded-full"
           >
-            {isListening ? (
-              <><MicOff className="w-4 h-4 mr-2" />Stop</>
-            ) : (
-              <><Mic className="w-4 h-4 mr-2" />Ask AI</>
-            )}
+            {isListening ? <><MicOff className="w-4 h-4 mr-2" />Stop</> : <><Mic className="w-4 h-4 mr-2" />Ask a Question</>}
           </Button>
         </div>
+      </motion.div>
 
-        {/* Live transcript */}
-        <AnimatePresence>
-          {(isListening || transcript) && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-4 p-3 rounded-xl bg-primary/5 border border-primary/20"
-            >
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Mic className="w-4 h-4 animate-pulse" />
-                <span>{transcript || "Listening..."}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {isThinking && (
-          <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
+      {/* Step Card */}
+      <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        {/* Progress */}
+        <div className="px-6 pt-5 pb-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono text-secondary font-bold tracking-widest">
+              STEP {currentStep + 1} OF {recipe.steps.length}
+            </span>
+            <span className="text-xs text-muted-foreground">{Math.round(progress)}% done</span>
           </div>
-        )}
-
-        {/* Chat messages */}
-        {chatMessages.length > 0 && (
-          <div className="mt-4 space-y-3 max-h-64 overflow-y-auto rounded-xl bg-muted/30 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <MessageCircle className="w-4 h-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Conversation</span>
-            </div>
-            {chatMessages.map((msg, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`p-3 rounded-lg text-sm ${
-                  msg.role === "user"
-                    ? "bg-primary/10 text-foreground ml-8"
-                    : "bg-background border border-border mr-8"
-                }`}
-              >
-                <span className="text-xs font-medium text-muted-foreground block mb-1">
-                  {msg.role === "user" ? "You" : "SmartCart AI"}
-                </span>
-                {msg.text}
-              </motion.div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
-        )}
-
-        {/* Progress bar */}
-        <div className="flex gap-1 mt-4">
-          {recipe.steps.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goToStep(i)}
-              className={`h-1.5 flex-1 rounded-full transition-colors cursor-pointer ${i <= currentStep ? "bg-primary" : "bg-muted"}`}
-            />
-          ))}
+          <Progress value={progress} className="h-2" />
         </div>
 
-        {/* Tips */}
-        {recipe.tips?.length > 0 && currentStep === recipe.steps.length - 1 && (
-          <div className="mt-6 p-4 rounded-xl bg-muted/50">
-            <h5 className="font-serif font-semibold mb-2">✨ Chef's Tips</h5>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              {recipe.tips.map((tip, i) => (
-                <li key={i}>• {tip}</li>
-              ))}
-            </ul>
+        {/* Step Content */}
+        <div className="px-6 pb-6">
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={currentStep}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="text-lg leading-relaxed py-6"
+            >
+              {recipe.steps[currentStep]}
+            </motion.p>
+          </AnimatePresence>
+
+          <div className="flex gap-3">
+            <Button variant="outline" disabled={currentStep === 0} onClick={() => goToStep(currentStep - 1)} className="rounded-full flex-1">
+              ← Previous
+            </Button>
+            <Button disabled={currentStep === recipe.steps.length - 1} onClick={() => goToStep(currentStep + 1)} className="bg-gradient-hero rounded-full flex-1">
+              Next Step →
+            </Button>
           </div>
+        </div>
+      </motion.div>
+
+      {/* Live transcript */}
+      <AnimatePresence>
+        {(isListening || transcript) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="glass-card p-4"
+          >
+            <div className="flex items-center gap-2 text-sm text-secondary">
+              <Mic className="w-4 h-4 animate-pulse" />
+              <span>{transcript || "Listening..."}</span>
+            </div>
+          </motion.div>
         )}
-      </div>
-    </motion.div>
+      </AnimatePresence>
+
+      {isThinking && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center py-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
+        </div>
+      )}
+
+      {/* Chat messages */}
+      {chatMessages.length > 0 && (
+        <div className="glass-card p-5 space-y-3 max-h-72 overflow-y-auto">
+          <div className="flex items-center gap-2 mb-2">
+            <MessageCircle className="w-4 h-4 text-secondary" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Conversation</span>
+          </div>
+          {chatMessages.map((msg, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-3 rounded-xl text-sm ${
+                msg.role === "user"
+                  ? "bg-secondary/10 text-foreground ml-8"
+                  : "bg-muted mr-8"
+              }`}
+            >
+              <span className="text-xs font-medium text-muted-foreground block mb-1">
+                {msg.role === "user" ? "You" : "SmartCart AI 🧑‍🍳"}
+              </span>
+              {msg.text}
+            </motion.div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+      )}
+
+      {/* Tips on last step */}
+      {recipe.tips?.length > 0 && currentStep === recipe.steps.length - 1 && (
+        <div className="glass-card p-5">
+          <h5 className="font-serif font-semibold mb-3">✨ Chef's Tips</h5>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            {recipe.tips.map((tip, i) => (
+              <li key={i} className="flex gap-2"><span>💡</span>{tip}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 };
 
