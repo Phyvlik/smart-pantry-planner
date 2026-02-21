@@ -49,16 +49,35 @@ function getBestProduct(products: StoreProduct[]): StoreProduct | null {
   );
 }
 
-function getDisplayPrice(
-  ingName: string,
-  storeProducts: Record<string, StoreProduct[]>,
-  recipe: Recipe
-): { recipePrice: number | null; storePrice: number | null } {
-  const best = getBestProduct(storeProducts[ingName] || []);
-  const recipeIng = recipe.ingredients.find((i) => i.name === ingName);
-  const recipePrice = recipeIng?.estimatedPrice ?? null;
-  const storePrice = best?.price ?? null;
-  return { recipePrice, storePrice };
+// Generate a substitute suggestion for unfound ingredients
+function getSuggestion(ingName: string): string {
+  // If there's a parenthetical, use its content as suggestion
+  const parenMatch = ingName.match(/\(([^)]+)\)/);
+  if (parenMatch) return parenMatch[1].trim();
+  
+  // Common substitution map
+  const subs: Record<string, string> = {
+    "tamarind": "Tamarind Paste",
+    "chutney": "Sweet Chili Sauce",
+    "masala": "Garam Masala",
+    "pav": "Dinner Rolls",
+    "paneer": "Ricotta or Tofu",
+    "ghee": "Clarified Butter",
+    "jaggery": "Brown Sugar",
+    "hing": "Garlic Powder",
+    "asafoetida": "Garlic Powder",
+    "curry leaves": "Bay Leaves",
+    "pomegranate seeds": "Dried Cranberries",
+  };
+  const lower = ingName.toLowerCase();
+  for (const [key, val] of Object.entries(subs)) {
+    if (lower.includes(key)) return val;
+  }
+  
+  // Fallback: simplify compound names
+  const words = ingName.replace(/\(.*?\)/g, "").trim().split(/\s+/);
+  if (words.length >= 2) return words[words.length - 1];
+  return "";
 }
 
 interface StorePricesPanelProps {
@@ -165,7 +184,12 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
                 )}
               </div>
             </div>
-            {notFound && null}
+            {notFound && (() => {
+              const suggestion = getSuggestion(ingName);
+              return suggestion ? (
+                <p className="text-xs text-muted-foreground mt-1 ml-6">💡 Try instead: <span className="font-medium text-foreground">{suggestion}</span></p>
+              ) : null;
+            })()}
           </div>
         );
       })}
