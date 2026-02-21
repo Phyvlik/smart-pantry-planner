@@ -194,15 +194,36 @@ export default function IngredientFinderPage() {
           {step === "stores" && (
             <motion.div key="stores" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <p className="text-sm text-muted-foreground text-center mb-6">
-                {locations.length} stores found near {zip}
+                {locations.length + 1} stores available near {zip}
               </p>
               <div className="space-y-3">
+                {/* Walmart Online card */}
+                <motion.button
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0 }}
+                  onClick={() => selectStore({ locationId: "walmart-online", name: "Walmart", address: "Online prices · walmart.com", chain: "WALMART" })}
+                  className="w-full glass-card p-5 flex items-center gap-4 text-left hover:ring-2 hover:ring-primary/40 transition-all"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                    <span className="text-2xl">🔵</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold">Walmart</div>
+                    <div className="text-xs text-muted-foreground truncate">Online prices · walmart.com</div>
+                    <Badge variant="outline" className="text-xs mt-1 rounded-full">WALMART</Badge>
+                  </div>
+                  <div className="flex items-center gap-1 text-primary font-medium text-sm shrink-0">
+                    <DollarSign className="w-4 h-4" /> Check Prices
+                  </div>
+                </motion.button>
+
                 {locations.map((loc, idx) => (
                   <motion.button
                     key={loc.locationId}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.06 }}
+                    transition={{ delay: (idx + 1) * 0.06 }}
                     onClick={() => selectStore(loc)}
                     className="w-full glass-card p-5 flex items-center gap-4 text-left hover:ring-2 hover:ring-primary/40 transition-all"
                   >
