@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store, DollarSign } from "lucide-react";
+import { ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store, DollarSign } from "lucide-react";
 import { StorePricesPanel } from "@/components/StorePricesPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { Recipe } from "@/components/RecipeCard";
@@ -20,23 +19,10 @@ interface KrogerLocation {
   chain: string;
 }
 
-interface KrogerProduct {
-  productId: string;
-  name: string;
-  brand: string;
-  size: string;
-  price: number | null;
-  available: boolean | null;
-}
-
 async function krogerFetch(action: string, params: Record<string, string> = {}) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/kroger-api`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
     body: JSON.stringify({ action, ...params }),
   });
   if (!res.ok) {
@@ -61,37 +47,23 @@ export default function IngredientFinderPage() {
   const [missingIngredients, setMissingIngredients] = useState<string[]>([]);
 
   useEffect(() => {
-    if (recipe) {
-      setMissingIngredients(recipe.ingredients.map((i) => i.name));
-    }
+    if (recipe) setMissingIngredients(recipe.ingredients.map((i) => i.name));
   }, [recipe]);
 
   const toggleIngredient = (name: string) => {
-    setMissingIngredients((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    );
+    setMissingIngredients((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
   };
 
   const searchStores = useCallback(async () => {
-    if (!/^\d{5}$/.test(zip)) {
-      toast.error("Please enter a valid 5-digit ZIP code.");
-      return;
-    }
-    if (missingIngredients.length === 0) {
-      toast.error("No missing ingredients selected.");
-      return;
-    }
+    if (!/^\d{5}$/.test(zip)) { toast.error("Please enter a valid 5-digit ZIP code."); return; }
+    if (missingIngredients.length === 0) { toast.error("No missing ingredients selected."); return; }
     setIsSearchingStores(true);
     try {
       const { locations: locs } = await krogerFetch("locations", { zip });
-      if (!locs || locs.length === 0) {
-        toast.error("No stores found near that ZIP code.");
-        return;
-      }
+      if (!locs || locs.length === 0) { toast.error("No stores found near that ZIP code."); return; }
       setLocations(locs);
       setStep("stores");
     } catch (err: any) {
-      console.error("Store search error:", err);
       toast.error(err.message || "Failed to search stores.");
     } finally {
       setIsSearchingStores(false);
@@ -105,63 +77,63 @@ export default function IngredientFinderPage() {
 
   const handleBuyFromStore = () => {
     if (selectedStore && recipe) {
-      localStorage.setItem(
-        "smartcart_selected_store",
-        JSON.stringify({ storeName: selectedStore.name, ingredients: missingIngredients })
-      );
+      localStorage.setItem("smartcart_selected_store", JSON.stringify({ storeName: selectedStore.name, ingredients: missingIngredients }));
       navigate("/cook", { state: { recipe, fromStore: selectedStore.name } });
     }
   };
 
   if (!recipe) {
     return (
-      <div className="flex flex-col min-h-screen">
-        <header className="flex items-center px-4 lg:px-6 h-14 bg-primary">
-          <Link to="/" className="flex items-center">
-            <ShoppingCart className="h-6 w-6 mr-2 text-primary-foreground" />
-            <span className="font-bold text-primary-foreground">SmartCart AI</span>
+      <div className="flex flex-col min-h-screen bg-background">
+        <header className="px-6 h-16 flex items-center bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
+          <Link to="/" className="flex items-center gap-2">
+            <span className="text-2xl">🍳</span>
+            <span className="font-serif font-bold text-xl text-foreground">SmartCart</span>
           </Link>
         </header>
-        <main className="flex-1 flex items-center justify-center">
+        <main className="flex-1 flex items-center justify-center px-6">
           <div className="text-center">
-            <p className="text-muted-foreground mb-4">No recipe selected. Go back and generate a recipe first.</p>
-            <Button onClick={() => navigate("/cook")} className="bg-gradient-hero">Go to Cook</Button>
+            <div className="text-5xl mb-4">🛒</div>
+            <p className="text-muted-foreground mb-4">No recipe selected. Go generate one first!</p>
+            <Button onClick={() => navigate("/cook")} className="bg-gradient-hero rounded-full px-8">Go to Cook</Button>
           </div>
         </main>
       </div>
     );
   }
 
-
   return (
-    <div className="flex flex-col min-h-screen">
-      <header className="flex items-center px-4 lg:px-6 h-14 bg-primary">
-        <Link to="/" className="flex items-center">
-          <ShoppingCart className="h-6 w-6 mr-2 text-primary-foreground" />
-          <span className="font-bold text-primary-foreground">SmartCart AI</span>
+    <div className="flex flex-col min-h-screen bg-background">
+      <header className="px-6 h-16 flex items-center bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
+        <Link to="/" className="flex items-center gap-2">
+          <span className="text-2xl">🍳</span>
+          <span className="font-serif font-bold text-xl text-foreground">SmartCart</span>
         </Link>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
+      <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
         <button onClick={() => {
-          if (step === "prices") { setStep("stores"); }
+          if (step === "prices") setStep("stores");
           else if (step === "stores") { setStep("ingredients"); setLocations([]); }
           else navigate(-1);
-        }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
+        }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
-        <h1 className="text-3xl font-bold font-serif mb-2 text-center">Ingredient Finder</h1>
-        <p className="text-muted-foreground text-center mb-6">
-          Finding ingredients for <span className="font-semibold text-foreground">{recipe.name}</span>
-        </p>
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🛒</div>
+          <h1 className="text-3xl font-serif font-bold mb-2">Find Your Ingredients</h1>
+          <p className="text-muted-foreground">
+            For <span className="font-semibold text-foreground">{recipe.name}</span>
+          </p>
+        </div>
 
         <AnimatePresence mode="wait">
           {/* Step 1: Select missing ingredients + ZIP */}
           {step === "ingredients" && (
-            <motion.div key="ingredients" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <div className="glass-card rounded-2xl p-5 mb-6">
-                <h3 className="font-serif font-semibold mb-3">Select missing ingredients</h3>
+            <motion.div key="ingredients" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+              <div className="glass-card p-6">
+                <h3 className="font-serif font-semibold mb-4">What do you need to buy?</h3>
                 <div className="grid gap-2">
                   {recipe.ingredients.map((ing, i) => {
                     const isMissing = missingIngredients.includes(ing.name);
@@ -169,20 +141,20 @@ export default function IngredientFinderPage() {
                       <button
                         key={i}
                         onClick={() => toggleIngredient(ing.name)}
-                        className={`flex items-center justify-between p-3 rounded-lg text-sm transition-colors text-left ${
-                          isMissing ? "bg-destructive/10 border border-destructive/20" : "bg-muted/50 border border-transparent"
+                        className={`flex items-center justify-between p-3.5 rounded-xl text-sm transition-all text-left ${
+                          isMissing ? "bg-secondary/10 border border-secondary/20" : "bg-muted/50 border border-transparent"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2.5">
                           {isMissing ? (
-                            <XCircle className="w-4 h-4 text-destructive shrink-0" />
+                            <XCircle className="w-4 h-4 text-secondary shrink-0" />
                           ) : (
                             <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                           )}
                           <span>{ing.amount} {ing.name}</span>
                         </div>
-                        <Badge variant={isMissing ? "destructive" : "outline"} className="text-xs">
-                          {isMissing ? "Missing" : "Have it"}
+                        <Badge variant={isMissing ? "default" : "outline"} className={`text-xs rounded-full ${isMissing ? "bg-secondary text-secondary-foreground" : ""}`}>
+                          {isMissing ? "Need to buy" : "Have it ✓"}
                         </Badge>
                       </button>
                     );
@@ -190,32 +162,28 @@ export default function IngredientFinderPage() {
                 </div>
               </div>
 
-              <div className="glass-card rounded-2xl p-5">
+              <div className="glass-card p-6">
                 <h3 className="font-serif font-semibold mb-3 flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-primary" /> Find Nearby Stores
+                  <MapPin className="w-5 h-5 text-secondary" /> Find stores near you
                 </h3>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <Input
                     value={zip}
                     onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                    placeholder="Enter ZIP code"
-                    className="max-w-[180px]"
+                    placeholder="ZIP code"
+                    className="max-w-[160px] rounded-xl"
                     maxLength={5}
                   />
                   <Button
                     onClick={searchStores}
                     disabled={isSearchingStores || zip.length !== 5 || missingIngredients.length === 0}
-                    className="bg-gradient-hero"
+                    className="bg-gradient-hero rounded-xl"
                   >
-                    {isSearchingStores ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Searching...</>
-                    ) : (
-                      <><Search className="w-4 h-4 mr-2" /> Search Stores</>
-                    )}
+                    {isSearchingStores ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Searching...</> : <><Search className="w-4 h-4 mr-2" /> Find Stores</>}
                   </Button>
                 </div>
                 {missingIngredients.length === 0 && (
-                  <p className="text-xs text-success mt-2">You have all ingredients! Go back and start cooking.</p>
+                  <p className="text-xs text-success mt-3">✅ You have everything! Go back and start cooking.</p>
                 )}
               </div>
             </motion.div>
@@ -224,8 +192,8 @@ export default function IngredientFinderPage() {
           {/* Step 2: Pick a store */}
           {step === "stores" && (
             <motion.div key="stores" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <p className="text-sm text-muted-foreground text-center mb-4">
-                {locations.length} stores found near {zip}. Select a store to check prices.
+              <p className="text-sm text-muted-foreground text-center mb-6">
+                {locations.length} stores found near {zip}
               </p>
               <div className="space-y-3">
                 {locations.map((loc, idx) => (
@@ -235,15 +203,15 @@ export default function IngredientFinderPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.06 }}
                     onClick={() => selectStore(loc)}
-                    className="w-full glass-card rounded-2xl p-4 flex items-center gap-4 text-left hover:ring-2 hover:ring-primary/40 transition-all"
+                    className="w-full glass-card p-5 flex items-center gap-4 text-left hover:ring-2 hover:ring-primary/40 transition-all"
                   >
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <Store className="w-6 h-6 text-primary" />
+                    <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <Store className="w-7 h-7 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold">{loc.name}</div>
                       <div className="text-xs text-muted-foreground truncate">{loc.address}</div>
-                      <Badge variant="outline" className="text-xs mt-1">{loc.chain}</Badge>
+                      <Badge variant="outline" className="text-xs mt-1 rounded-full">{loc.chain}</Badge>
                     </div>
                     <div className="flex items-center gap-1 text-primary font-medium text-sm shrink-0">
                       <DollarSign className="w-4 h-4" /> Check Prices
@@ -254,7 +222,7 @@ export default function IngredientFinderPage() {
             </motion.div>
           )}
 
-          {/* Step 3: Show prices for selected store */}
+          {/* Step 3: Prices */}
           {step === "prices" && selectedStore && (
             <StorePricesPanel
               recipe={recipe}
@@ -266,8 +234,8 @@ export default function IngredientFinderPage() {
           )}
         </AnimatePresence>
 
-        <p className="text-xs text-muted-foreground mt-6 text-center">
-          Powered by Kroger & Walmart APIs. Prices and availability may vary.
+        <p className="text-xs text-muted-foreground mt-8 text-center">
+          Powered by Kroger & Walmart APIs. Prices may vary.
         </p>
       </main>
     </div>
