@@ -63,11 +63,12 @@ function getDisplayPrice(
   ingName: string,
   storeProducts: Record<string, StoreProduct[]>,
   recipe: Recipe
-): number | null {
+): { recipePrice: number | null; storePrice: number | null } {
   const best = getBestProduct(storeProducts[ingName] || []);
-  if (best?.price != null) return best.price;
   const recipeIng = recipe.ingredients.find((i) => i.name === ingName);
-  return recipeIng?.estimatedPrice ?? null;
+  const recipePrice = recipeIng?.estimatedPrice ?? null;
+  const storePrice = best?.price ?? null;
+  return { recipePrice, storePrice };
 }
 
 interface StorePricesPanelProps {
@@ -121,14 +122,26 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
     })();
   }
 
-  const calcTotal = (data: Record<string, StoreProduct[]>) =>
-    missingIngredients.reduce((sum, ing) => sum + (getDisplayPrice(ing, data, recipe) ?? 0), 0);
+  // Use recipe estimates for totals (per-portion cost = what you actually use)
+  const calcRecipeTotal = () =>
+    missingIngredients.reduce((sum, ing) => {
+      const recipeIng = recipe.ingredients.find((i) => i.name === ing);
+      return sum + (recipeIng?.estimatedPrice ?? 0);
+    }, 0);
 
-  const krogerTotal = calcTotal(krogerData);
-  const walmartTotal = calcTotal(walmartData);
+  // Store total = what you'd actually pay at checkout (whole products)
+  const calcStoreTotal = (data: Record<string, StoreProduct[]>) =>
+    missingIngredients.reduce((sum, ing) => {
+      const best = getBestProduct(data[ing] || []);
+      return sum + (best?.price ?? 0);
+    }, 0);
+
+  const recipeTotal = calcRecipeTotal();
+  const krogerStoreTotal = calcStoreTotal(krogerData);
+  const walmartStoreTotal = calcStoreTotal(walmartData);
   const bothLoaded = !isLoadingKroger && !isLoadingWalmart;
-  const krogerCheaper = bothLoaded && krogerTotal <= walmartTotal;
-  const walmartCheaper = bothLoaded && walmartTotal < krogerTotal;
+  const krogerCheaper = bothLoaded && krogerStoreTotal <= walmartStoreTotal;
+  const walmartCheaper = bothLoaded && walmartStoreTotal < krogerStoreTotal;
 
   const renderIngredientList = (
     storeProducts: Record<string, StoreProduct[]>,
@@ -141,8 +154,8 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
         const best = getBestProduct(storeProducts[ingName] || []);
         const hasProduct = loaded && best != null;
         const notFound = loaded && !best;
-        const displayPrice = loaded ? getDisplayPrice(ingName, storeProducts, recipe) : null;
-        const isEstimated = hasProduct && best?.price == null && displayPrice != null;
+        const prices = loaded ? getDisplayPrice(ingName, storeProducts, recipe) : null;
+        const mainPrice = prices?.recipePrice ?? prices?.storePrice ?? null;
 
         return (
           <div key={ingName} className="py-2 px-3 rounded-lg bg-muted/30">
@@ -162,6 +175,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
                   {best && (
                     <p className="text-xs text-muted-foreground truncate">
                       {best.name} {best.size ? `· ${best.size}` : ""}
+                      {best.price != null && ` · $${best.price.toFixed(2)} whole`}
                     </p>
                   )}
                 </div>
@@ -169,10 +183,10 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
               <div className="text-right shrink-0 ml-3">
                 {!loaded ? (
                   <Skeleton className="h-5 w-14" />
-                ) : displayPrice != null ? (
+                ) : mainPrice != null ? (
                   <div className="text-right">
-                    <span className="font-semibold text-sm">${displayPrice.toFixed(2)}</span>
-                    {isEstimated && <p className="text-[10px] text-muted-foreground">est.</p>}
+                    <span className="font-semibold text-sm">${mainPrice.toFixed(2)}</span>
+                    <p className="text-[10px] text-muted-foreground">per recipe</p>
                   </div>
                 ) : (
                   <span className="text-xs text-destructive">Not found</span>
@@ -191,13 +205,17 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
       {!isLoading && (
         <div className="mt-4 pt-3 border-t border-border">
           <div className="flex justify-between items-center mb-1">
-            <span className="font-semibold">Estimated Total</span>
+            <span className="font-semibold">Recipe Cost</span>
             <span className="font-bold text-lg">
-              {calcTotal(storeProducts) > 0
-                ? `$${calcTotal(storeProducts).toFixed(2)}`
-                : "—"}
+              {recipeTotal > 0 ? `$${recipeTotal.toFixed(2)}` : "—"}
             </span>
           </div>
+          {calcStoreTotal(storeProducts) > 0 && (
+            <div className="flex justify-between items-center mb-1 text-muted-foreground">
+              <span className="text-xs">Store checkout total (whole items)</span>
+              <span className="text-xs font-medium">${calcStoreTotal(storeProducts).toFixed(2)}</span>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             {missingIngredients.filter((ing) => getBestProduct(storeProducts[ing] || []) != null).length} of{" "}
             {missingIngredients.length} ingredients found
@@ -220,7 +238,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
               <span className="text-2xl">🟡</span>
               <p className="font-medium text-sm mt-1">Kroger</p>
               <p className={`font-bold text-lg ${krogerCheaper ? "text-success" : ""}`}>
-                ${krogerTotal.toFixed(2)}
+                ${krogerStoreTotal.toFixed(2)}
               </p>
               {krogerCheaper && (
                 <Badge className="bg-success text-success-foreground text-xs mt-1">Best Price</Badge>
@@ -230,16 +248,16 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
               <span className="text-2xl">🔵</span>
               <p className="font-medium text-sm mt-1">Walmart</p>
               <p className={`font-bold text-lg ${walmartCheaper ? "text-success" : ""}`}>
-                ${walmartTotal.toFixed(2)}
+                ${walmartStoreTotal.toFixed(2)}
               </p>
               {walmartCheaper && (
                 <Badge className="bg-success text-success-foreground text-xs mt-1">Best Price</Badge>
               )}
             </div>
           </div>
-          {Math.abs(krogerTotal - walmartTotal) > 0.01 && (
+          {Math.abs(krogerStoreTotal - walmartStoreTotal) > 0.01 && (
             <p className="text-xs text-center text-muted-foreground mt-2">
-              Save ${Math.abs(krogerTotal - walmartTotal).toFixed(2)} by shopping at{" "}
+              Save ${Math.abs(krogerStoreTotal - walmartStoreTotal).toFixed(2)} by shopping at{" "}
               <span className="font-semibold">{krogerCheaper ? "Kroger" : "Walmart"}</span>
             </p>
           )}
@@ -253,11 +271,11 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
             <TabsList className="w-full">
               <TabsTrigger value="kroger" className="flex-1 gap-2">
                 🟡 Kroger
-                {!isLoadingKroger && <span className="text-xs opacity-70">${krogerTotal.toFixed(2)}</span>}
+                {!isLoadingKroger && <span className="text-xs opacity-70">${krogerStoreTotal.toFixed(2)}</span>}
               </TabsTrigger>
               <TabsTrigger value="walmart" className="flex-1 gap-2">
                 🔵 Walmart
-                {!isLoadingWalmart && <span className="text-xs opacity-70">${walmartTotal.toFixed(2)}</span>}
+                {!isLoadingWalmart && <span className="text-xs opacity-70">${walmartStoreTotal.toFixed(2)}</span>}
               </TabsTrigger>
             </TabsList>
           </div>
