@@ -1,0 +1,4 @@
+project_id = "eminvqqyupgxdqjtdjqb"
+
+[functions.smartcart-ai]
+verify_jwt = false
