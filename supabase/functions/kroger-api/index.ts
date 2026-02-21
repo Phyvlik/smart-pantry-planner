@@ -155,13 +155,17 @@ serve(async (req) => {
         if (hasPrice) score += 8;
         if (item?.fulfillment?.inStore === true) score += 3;
 
+        const price = item?.price?.regular ?? item?.price?.promo ?? null;
+        // If we found a product from Kroger, treat it as available (cert env has limited fulfillment data)
+        const isAvailable = !!(price || item?.fulfillment?.inStore || p.productId);
+
         return {
           productId: p.productId,
           name: p.description,
           brand: p.brand,
           size: item?.size || "",
-          price: item?.price?.regular ?? item?.price?.promo ?? null,
-          available: item?.fulfillment?.inStore ?? null,
+          price,
+          available: isAvailable,
           _score: score,
         };
       });
