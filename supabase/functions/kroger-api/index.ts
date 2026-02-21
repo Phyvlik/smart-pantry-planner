@@ -18,7 +18,7 @@ async function getKrogerToken(): Promise<string> {
   if (!clientId || !clientSecret) throw new Error("Kroger credentials not configured");
 
   const encoded = btoa(`${clientId}:${clientSecret}`);
-  const res = await fetch("https://api.kroger.com/v1/connect/oauth2/token", {
+  const res = await fetch("https://api-ce.kroger.com/v1/connect/oauth2/token", {
     method: "POST",
     headers: {
       Authorization: `Basic ${encoded}`,
@@ -60,7 +60,7 @@ serve(async (req) => {
       }
       const token = await getKrogerToken();
       const res = await fetch(
-        `https://api.kroger.com/v1/locations?filter.zipCode.near=${zip}&filter.limit=5&filter.radiusInMiles=10`,
+        `https://api-ce.kroger.com/v1/locations?filter.zipCode.near=${zip}&filter.limit=5&filter.radiusInMiles=10`,
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }
       );
       if (!res.ok) {
@@ -89,7 +89,7 @@ serve(async (req) => {
         });
       }
       const token = await getKrogerToken();
-      let apiUrl = `https://api.kroger.com/v1/products?filter.term=${encodeURIComponent(q)}&filter.limit=3`;
+      let apiUrl = `https://api-ce.kroger.com/v1/products?filter.term=${encodeURIComponent(q)}&filter.limit=3`;
       if (locationId) apiUrl += `&filter.locationId=${encodeURIComponent(locationId)}`;
       const res = await fetch(apiUrl, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
