@@ -59,6 +59,7 @@ function scoreResults(items: any[], searchTerm: string) {
       size: "",
       price: numPrice,
       available: true,
+      image: item.thumbnail || null,
       rating: item.rating ?? null,
       _relevance: relevance,
     };

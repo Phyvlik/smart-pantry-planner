@@ -25,6 +25,7 @@ interface StoreProduct {
   size: string;
   price: number | null;
   available: boolean | null;
+  image: string | null;
 }
 
 async function apiFetch(fnName: string, body: Record<string, string>) {
@@ -150,34 +151,42 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
 
         return (
           <div key={ingName} className="py-3 px-4 rounded-xl bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                {!loaded ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
-                ) : hasProduct ? (
-                  <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-destructive shrink-0" />
-                )}
-                <div className="min-w-0">
-                  <span className={`text-sm font-medium ${!loaded ? "text-muted-foreground" : hasProduct ? "" : "text-muted-foreground"}`}>
-                    {ingName}
-                  </span>
-                  {best && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {best.name} {best.size ? `· ${best.size}` : ""}
-                      {best.price != null && ` · $${best.price.toFixed(2)} whole`}
-                    </p>
+            <div className="flex items-center justify-between gap-3">
+              {/* Product image or status icon */}
+              {!loaded ? (
+                <Skeleton className="w-12 h-12 rounded-lg shrink-0" />
+              ) : best?.image ? (
+                <img
+                  src={best.image}
+                  alt={best.name}
+                  className="w-12 h-12 rounded-lg object-cover bg-white shrink-0"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              ) : (
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${hasProduct ? "bg-success/10" : "bg-destructive/10"}`}>
+                  {hasProduct ? (
+                    <CheckCircle2 className="w-5 h-5 text-success" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-destructive" />
                   )}
                 </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <span className={`text-sm font-medium ${!loaded ? "text-muted-foreground" : hasProduct ? "" : "text-muted-foreground"}`}>
+                  {ingName}
+                </span>
+                {best && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {best.name} {best.size ? `· ${best.size}` : ""}
+                  </p>
+                )}
               </div>
-              <div className="text-right shrink-0 ml-3">
+              <div className="text-right shrink-0 ml-2">
                 {!loaded ? (
                   <Skeleton className="h-5 w-14" />
                 ) : mainPrice != null ? (
                   <div className="text-right">
                     <span className="font-semibold text-sm">${mainPrice.toFixed(2)}</span>
-                    <p className="text-[10px] text-muted-foreground">per recipe</p>
                   </div>
                 ) : (
                   <span className="text-xs text-destructive">Not found</span>

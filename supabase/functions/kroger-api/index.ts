@@ -80,6 +80,23 @@ function scoreProducts(items: any[], searchTerm: string) {
     const price = item?.price?.promo ?? item?.price?.regular ?? null;
     const isAvailable = !!(price || item?.fulfillment?.inStore || p.productId);
 
+    // Extract image - prefer "front" view, medium size
+    const images = p.images || [];
+    let imageUrl = "";
+    for (const img of images) {
+      if (img.perspective === "front") {
+        const sizes = img.sizes || [];
+        const medium = sizes.find((s: any) => s.size === "medium") || sizes.find((s: any) => s.size === "small") || sizes[0];
+        if (medium?.url) imageUrl = medium.url;
+        break;
+      }
+    }
+    if (!imageUrl && images.length > 0) {
+      const sizes = images[0].sizes || [];
+      const medium = sizes.find((s: any) => s.size === "medium") || sizes[0];
+      if (medium?.url) imageUrl = medium.url;
+    }
+
     return {
       productId: p.productId,
       name: p.description,
@@ -87,6 +104,7 @@ function scoreProducts(items: any[], searchTerm: string) {
       size: item?.size || "",
       price,
       available: isAvailable,
+      image: imageUrl || null,
       _relevance: relevance,
     };
   });
