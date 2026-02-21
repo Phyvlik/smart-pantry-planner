@@ -19,7 +19,7 @@ export default function LandingPage() {
       <header className="px-6 h-16 flex items-center justify-between bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
         <Link to="/" className="flex items-center gap-2">
           <span className="text-2xl">🍳</span>
-          <span className="font-serif font-bold text-xl text-foreground">SmartCart</span>
+          <span className="font-serif font-bold text-xl text-foreground">TasteStack</span>
         </Link>
         <nav className="hidden sm:flex items-center gap-6">
           <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
@@ -176,9 +176,9 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xl">🍳</span>
-            <span className="font-serif font-semibold text-foreground">SmartCart AI</span>
+            <span className="font-serif font-semibold text-foreground">TasteStack</span>
           </div>
-          <p className="text-xs text-muted-foreground">© 2025 SmartCart AI. Made with warmth.</p>
+          <p className="text-xs text-muted-foreground">© 2025 TasteStack. Made with warmth.</p>
         </div>
       </footer>
     </div>

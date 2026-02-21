@@ -273,7 +273,7 @@ const CookMode = ({ recipe }: CookModeProps) => {
               }`}
             >
               <span className="text-xs font-medium text-muted-foreground block mb-1">
-                {msg.role === "user" ? "You" : "SmartCart AI 🧑‍🍳"}
+                {msg.role === "user" ? "You" : "TasteStack AI 🧑‍🍳"}
               </span>
               {msg.text}
             </motion.div>

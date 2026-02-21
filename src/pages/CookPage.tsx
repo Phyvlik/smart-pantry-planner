@@ -58,7 +58,7 @@ export default function CookPage() {
       <header className="px-6 h-16 flex items-center justify-between bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
         <Link to="/" className="flex items-center gap-2">
           <span className="text-2xl">🍳</span>
-          <span className="font-serif font-bold text-xl text-foreground">SmartCart</span>
+          <span className="font-serif font-bold text-xl text-foreground">TasteStack</span>
         </Link>
       </header>
 
