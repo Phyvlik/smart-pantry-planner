@@ -162,11 +162,19 @@ export default function IngredientFinderPage() {
       || prods[0] || null;
   };
 
+  // Get the display price: Kroger price first, then recipe's estimated price as fallback
+  const getDisplayPrice = (ingName: string): number | null => {
+    const best = getBestProduct(ingName);
+    if (best?.price != null) return best.price;
+    // Fallback to recipe's estimatedPrice
+    const recipeIng = recipe.ingredients.find((i) => i.name === ingName);
+    return recipeIng?.estimatedPrice ?? null;
+  };
+
   // Calculate total for loaded products
   const loadedIngredients = Object.keys(products);
   const totalPrice = missingIngredients.reduce((sum, ing) => {
-    const best = getBestProduct(ing);
-    return sum + (best?.price ?? 0);
+    return sum + (getDisplayPrice(ing) ?? 0);
   }, 0);
   const availableCount = missingIngredients.filter((ing) => getBestProduct(ing) != null).length;
 
@@ -317,6 +325,8 @@ export default function IngredientFinderPage() {
                       const best = getBestProduct(ingName);
                       const hasProduct = loaded && best != null;
                       const notFound = loaded && !best;
+                      const displayPrice = loaded ? getDisplayPrice(ingName) : null;
+                      const isEstimated = hasProduct && best?.price == null && displayPrice != null;
 
                       return (
                         <div key={ingName} className="py-2 px-3 rounded-lg bg-muted/30">
@@ -343,10 +353,11 @@ export default function IngredientFinderPage() {
                             <div className="text-right shrink-0 ml-3">
                               {!loaded ? (
                                 <Skeleton className="h-5 w-14" />
-                              ) : best?.price != null ? (
-                                <span className="font-semibold text-sm">${best.price.toFixed(2)}</span>
-                              ) : hasProduct ? (
-                                <Badge variant="outline" className="text-xs">Price in store</Badge>
+                              ) : displayPrice != null ? (
+                                <div className="text-right">
+                                  <span className="font-semibold text-sm">${displayPrice.toFixed(2)}</span>
+                                  {isEstimated && <p className="text-[10px] text-muted-foreground">est.</p>}
+                                </div>
                               ) : (
                                 <span className="text-xs text-destructive">Not found</span>
                               )}
