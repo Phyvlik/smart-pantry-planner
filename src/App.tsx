@@ -7,6 +7,7 @@ import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import CookPage from "./pages/CookPage";
 import ShopPage from "./pages/ShopPage";
+import IngredientFinderPage from "./pages/IngredientFinderPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/cook" element={<CookPage />} />
           <Route path="/shop" element={<ShopPage />} />
+          <Route path="/ingredient-finder" element={<IngredientFinderPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
