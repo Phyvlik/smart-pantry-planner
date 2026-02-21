@@ -165,9 +165,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
                 )}
               </div>
             </div>
-            {notFound && (
-              <p className="text-xs text-muted-foreground mt-1 ml-6 italic">💡 Try a similar ingredient</p>
-            )}
+            {notFound && null}
           </div>
         );
       })}
@@ -198,7 +196,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
           <div className="grid grid-cols-2 gap-4">
             <div className={`p-4 rounded-2xl text-center transition-all ${krogerCheaper ? "bg-success/10 ring-2 ring-success/30" : "bg-muted/50"}`}>
               <span className="text-3xl">🟡</span>
-              <p className="font-medium text-sm mt-2">Kroger</p>
+              <p className="font-medium text-sm mt-2">{selectedStore.name.split("–")[0].trim()}</p>
               <p className={`font-bold text-xl mt-1 ${krogerCheaper ? "text-success" : ""}`}>
                 ${krogerStoreTotal.toFixed(2)}
               </p>
@@ -220,7 +218,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
           {Math.abs(krogerStoreTotal - walmartStoreTotal) > 0.01 && (
             <p className="text-sm text-center text-muted-foreground mt-3">
               Save <span className="font-semibold text-success">${Math.abs(krogerStoreTotal - walmartStoreTotal).toFixed(2)}</span> at{" "}
-              <span className="font-semibold">{krogerCheaper ? "Kroger" : "Walmart"}</span>
+              <span className="font-semibold">{krogerCheaper ? selectedStore.name.split("–")[0].trim() : "Walmart"}</span>
             </p>
           )}
         </div>
@@ -232,7 +230,7 @@ export function StorePricesPanel({ recipe, missingIngredients, selectedStore, on
           <div className="px-5 pt-5">
             <TabsList className="w-full rounded-xl">
               <TabsTrigger value="kroger" className="flex-1 gap-2 rounded-lg">
-                🟡 Kroger
+                🟡 {selectedStore.name.split("–")[0].trim()}
                 {!isLoadingKroger && <span className="text-xs opacity-70">${krogerStoreTotal.toFixed(2)}</span>}
               </TabsTrigger>
               <TabsTrigger value="walmart" className="flex-1 gap-2 rounded-lg">
