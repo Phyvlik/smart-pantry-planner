@@ -77,7 +77,11 @@ function scoreProducts(items: any[], searchTerm: string) {
     }
     if (desc.includes("baby") && !searchLower.includes("baby")) relevance -= 5;
 
-    const price = item?.price?.promo ?? item?.price?.regular ?? null;
+    const promoPrice = item?.price?.promo;
+    const regularPrice = item?.price?.regular;
+    const price = (typeof promoPrice === "number" && promoPrice > 0) ? promoPrice
+      : (typeof regularPrice === "number" && regularPrice > 0) ? regularPrice
+      : null;
     const isAvailable = !!(price || item?.fulfillment?.inStore || p.productId);
 
     // Extract image - prefer "front" view, medium size

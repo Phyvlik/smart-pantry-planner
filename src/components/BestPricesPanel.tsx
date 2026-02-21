@@ -106,18 +106,28 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
 
   const isLoading = isLoadingKroger || isLoadingWalmart;
 
-  const krogerTotal = missingIngredients.reduce((sum, ing) => {
+  const krogerPricedItems = missingIngredients.filter((ing) => {
+    const best = getBestProduct(krogerData[ing] || []);
+    return best?.price != null && best.price > 0;
+  });
+  const krogerTotal = krogerPricedItems.reduce((sum, ing) => {
     const best = getBestProduct(krogerData[ing] || []);
     return sum + (best?.price ?? 0);
   }, 0);
+  const krogerHasPrices = krogerPricedItems.length > 0;
 
-  const walmartTotal = missingIngredients.reduce((sum, ing) => {
+  const walmartPricedItems = missingIngredients.filter((ing) => {
+    const best = getBestProduct(walmartData[ing] || []);
+    return best?.price != null && best.price > 0;
+  });
+  const walmartTotal = walmartPricedItems.reduce((sum, ing) => {
     const best = getBestProduct(walmartData[ing] || []);
     return sum + (best?.price ?? 0);
   }, 0);
+  const walmartHasPrices = walmartPricedItems.length > 0;
 
-  const krogerCheaper = !isLoading && krogerTotal > 0 && krogerTotal <= walmartTotal;
-  const walmartCheaper = !isLoading && walmartTotal > 0 && walmartTotal < krogerTotal;
+  const krogerCheaper = !isLoading && krogerHasPrices && walmartHasPrices && krogerTotal <= walmartTotal;
+  const walmartCheaper = !isLoading && walmartHasPrices && krogerHasPrices && walmartTotal < krogerTotal;
 
   return (
     <motion.div key="prices" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-5">
@@ -132,7 +142,7 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
               <span className="text-3xl">🟡</span>
               <p className="font-medium text-sm mt-2">{storeName}</p>
               <p className={`font-bold text-xl mt-1 ${krogerCheaper ? "text-success" : ""}`}>
-                ${krogerTotal.toFixed(2)}
+                {krogerHasPrices ? `$${krogerTotal.toFixed(2)}` : <span className="text-muted-foreground text-sm">No prices available</span>}
               </p>
               {krogerCheaper && (
                 <Badge className="bg-success text-success-foreground text-xs mt-2 rounded-full">Cheaper 🏆</Badge>
@@ -142,14 +152,14 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
               <span className="text-3xl">🔵</span>
               <p className="font-medium text-sm mt-2">Walmart</p>
               <p className={`font-bold text-xl mt-1 ${walmartCheaper ? "text-success" : ""}`}>
-                ${walmartTotal.toFixed(2)}
+                {walmartHasPrices ? `$${walmartTotal.toFixed(2)}` : <span className="text-muted-foreground text-sm">No prices available</span>}
               </p>
               {walmartCheaper && (
                 <Badge className="bg-success text-success-foreground text-xs mt-2 rounded-full">Cheaper 🏆</Badge>
               )}
             </div>
           </div>
-          {Math.abs(krogerTotal - walmartTotal) > 0.01 && krogerTotal > 0 && walmartTotal > 0 && (
+          {krogerHasPrices && walmartHasPrices && Math.abs(krogerTotal - walmartTotal) > 0.01 && (
             <p className="text-sm text-center text-muted-foreground mt-3">
               Save <span className="font-semibold text-success">${Math.abs(krogerTotal - walmartTotal).toFixed(2)}</span> at{" "}
               <span className="font-semibold">{krogerCheaper ? storeName : "Walmart"}</span>
@@ -252,10 +262,10 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
             <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center">
               <span className="font-semibold">Total</span>
               <span className={`w-24 text-center font-bold text-lg ${krogerCheaper ? "text-success" : ""}`}>
-                ${krogerTotal.toFixed(2)}
+                {krogerHasPrices ? `$${krogerTotal.toFixed(2)}` : "—"}
               </span>
               <span className={`w-24 text-center font-bold text-lg ${walmartCheaper ? "text-success" : ""}`}>
-                ${walmartTotal.toFixed(2)}
+                {walmartHasPrices ? `$${walmartTotal.toFixed(2)}` : "—"}
               </span>
             </div>
           </div>
