@@ -141,6 +141,25 @@ const CookMode = ({ recipe }: CookModeProps) => {
 
   const progress = ((currentStep + 1) / recipe.steps.length) * 100;
 
+  // Determine orb state
+  const orbClass = isSpeaking
+    ? "voice-orb voice-orb-speaking voice-pulse"
+    : isListening
+    ? "voice-orb voice-orb-listening voice-listen-pulse"
+    : voiceEnabled
+    ? "voice-orb gentle-float"
+    : "bg-muted/60";
+
+  const orbStatusText = isSpeaking
+    ? "Your AI chef is guiding you... 🧑‍🍳"
+    : isListening
+    ? "I'm listening... go ahead!"
+    : isThinking
+    ? "Let me think about that..."
+    : voiceEnabled
+    ? "Voice mode active — I'm here to help!"
+    : "Tap below to bring your AI chef to life 🎙️";
+
   return (
     <div className="space-y-6">
       {/* Voice Orb + Controls */}
@@ -151,34 +170,52 @@ const CookMode = ({ recipe }: CookModeProps) => {
       >
         {/* Voice Orb */}
         <div className="flex justify-center mb-6">
-          <div className={`w-24 h-24 rounded-full flex items-center justify-center ${isSpeaking ? "voice-orb voice-pulse" : "bg-muted"} transition-all duration-500`}>
+          <motion.div
+            className={`w-28 h-28 rounded-full flex items-center justify-center transition-all duration-700 ${orbClass}`}
+            animate={isSpeaking ? { scale: [1, 1.05, 1] } : {}}
+            transition={{ repeat: Infinity, duration: 2 }}
+          >
             {isSpeaking ? (
-              <Volume2 className="w-10 h-10 text-secondary" />
+              <Volume2 className="w-11 h-11 text-secondary" />
             ) : isListening ? (
-              <Mic className="w-10 h-10 text-secondary animate-pulse" />
+              <Mic className="w-11 h-11 text-primary" />
+            ) : isThinking ? (
+              <Loader2 className="w-11 h-11 text-secondary animate-spin" />
             ) : (
-              <ChefHat className="w-10 h-10 text-muted-foreground" />
+              <ChefHat className="w-11 h-11 text-muted-foreground" />
             )}
-          </div>
+          </motion.div>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-4">
-          {isSpeaking ? "I'm guiding you..." : isListening ? "Listening..." : voiceEnabled ? "Voice mode active" : "Tap to enable voice cooking"}
-        </p>
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={orbStatusText}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="text-sm text-muted-foreground mb-5 h-5"
+          >
+            {orbStatusText}
+          </motion.p>
+        </AnimatePresence>
 
         <div className="flex flex-wrap gap-3 justify-center">
           <Button
             onClick={toggleVoice}
-            className={voiceEnabled ? "bg-gradient-warm rounded-full" : "bg-gradient-hero rounded-full"}
+            className={`rounded-full px-6 ${voiceEnabled ? "bg-gradient-warm" : "bg-gradient-hero"}`}
           >
-            {isSpeaking ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Speaking...</> :
-             voiceEnabled ? <><VolumeX className="w-4 h-4 mr-2" />Stop Voice</> :
-             <><Volume2 className="w-4 h-4 mr-2" />Start Voice 🎙️</>}
+            {isSpeaking ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Speaking...</>
+            ) : voiceEnabled ? (
+              <><VolumeX className="w-4 h-4 mr-2" />Mute Chef</>
+            ) : (
+              <><Volume2 className="w-4 h-4 mr-2" />Let's Cook! 🎙️</>
+            )}
           </Button>
 
           {isSpeaking && (
             <Button onClick={stopSpeaking} variant="outline" className="rounded-full">
-              <VolumeX className="w-4 h-4 mr-1" /> Stop
+              <VolumeX className="w-4 h-4 mr-1" /> Shh!
             </Button>
           )}
 
@@ -188,14 +225,17 @@ const CookMode = ({ recipe }: CookModeProps) => {
             variant={isListening ? "destructive" : "outline"}
             className="rounded-full"
           >
-            {isListening ? <><MicOff className="w-4 h-4 mr-2" />Stop</> : <><Mic className="w-4 h-4 mr-2" />Ask a Question</>}
+            {isListening ? (
+              <><MicOff className="w-4 h-4 mr-2" />Done</>
+            ) : (
+              <><Mic className="w-4 h-4 mr-2" />Ask Chef</>
+            )}
           </Button>
         </div>
       </motion.div>
 
       {/* Step Card */}
       <motion.div className="glass-card overflow-hidden" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        {/* Progress */}
         <div className="px-6 pt-5 pb-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-mono text-secondary font-bold tracking-widest">
@@ -206,7 +246,6 @@ const CookMode = ({ recipe }: CookModeProps) => {
           <Progress value={progress} className="h-2" />
         </div>
 
-        {/* Step Content */}
         <div className="px-6 pb-6">
           <AnimatePresence mode="wait">
             <motion.p
@@ -222,10 +261,14 @@ const CookMode = ({ recipe }: CookModeProps) => {
 
           <div className="flex gap-3">
             <Button variant="outline" disabled={currentStep === 0} onClick={() => goToStep(currentStep - 1)} className="rounded-full flex-1">
-              ← Previous
+              ← Wait, go back
             </Button>
-            <Button disabled={currentStep === recipe.steps.length - 1} onClick={() => goToStep(currentStep + 1)} className="bg-gradient-hero rounded-full flex-1">
-              Next Step →
+            <Button
+              disabled={currentStep === recipe.steps.length - 1}
+              onClick={() => goToStep(currentStep + 1)}
+              className="bg-gradient-hero rounded-full flex-1"
+            >
+              {currentStep === recipe.steps.length - 2 ? "Final step! →" : "Next step →"}
             </Button>
           </div>
         </div>
@@ -240,18 +283,22 @@ const CookMode = ({ recipe }: CookModeProps) => {
             exit={{ opacity: 0, height: 0 }}
             className="glass-card p-4"
           >
-            <div className="flex items-center gap-2 text-sm text-secondary">
+            <div className="flex items-center gap-2 text-sm text-primary">
               <Mic className="w-4 h-4 animate-pulse" />
-              <span>{transcript || "Listening..."}</span>
+              <span>{transcript || "I'm all ears..."}</span>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {isThinking && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center py-2">
-          <Loader2 className="w-4 h-4 animate-spin" /> Thinking...
-        </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-center gap-2 text-sm text-muted-foreground justify-center py-2"
+        >
+          <Loader2 className="w-4 h-4 animate-spin" /> Thinking of the best advice...
+        </motion.div>
       )}
 
       {/* Chat messages */}
@@ -259,7 +306,7 @@ const CookMode = ({ recipe }: CookModeProps) => {
         <div className="glass-card p-5 space-y-3 max-h-72 overflow-y-auto">
           <div className="flex items-center gap-2 mb-2">
             <MessageCircle className="w-4 h-4 text-secondary" />
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Conversation</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kitchen Chat</span>
           </div>
           {chatMessages.map((msg, i) => (
             <motion.div
@@ -273,7 +320,7 @@ const CookMode = ({ recipe }: CookModeProps) => {
               }`}
             >
               <span className="text-xs font-medium text-muted-foreground block mb-1">
-                {msg.role === "user" ? "You" : "TasteStack AI 🧑‍🍳"}
+                {msg.role === "user" ? "You 👤" : "Chef AI 🧑‍🍳"}
               </span>
               {msg.text}
             </motion.div>
@@ -284,14 +331,18 @@ const CookMode = ({ recipe }: CookModeProps) => {
 
       {/* Tips on last step */}
       {recipe.tips?.length > 0 && currentStep === recipe.steps.length - 1 && (
-        <div className="glass-card p-5">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-5"
+        >
           <h5 className="font-serif font-semibold mb-3">✨ Chef's Tips</h5>
           <ul className="space-y-2 text-sm text-muted-foreground">
             {recipe.tips.map((tip, i) => (
               <li key={i} className="flex gap-2"><span>💡</span>{tip}</li>
             ))}
           </ul>
-        </div>
+        </motion.div>
       )}
     </div>
   );

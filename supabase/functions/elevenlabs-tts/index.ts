@@ -13,7 +13,7 @@ serve(async (req) => {
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
     if (!ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY is not configured");
 
-    const voice = voiceId || "JBFqnCBsd6RMkjVDRZzb"; // George
+    const voice = voiceId || "JBFqnCBsd6RMkjVDRZzb"; // George - warm, friendly
 
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`,
@@ -27,8 +27,10 @@ serve(async (req) => {
           text,
           model_id: "eleven_turbo_v2_5",
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
+            stability: 0.35,
+            similarity_boost: 0.85,
+            style: 0.8,
+            use_speaker_boost: true,
             speed: 1.0,
           },
         }),
