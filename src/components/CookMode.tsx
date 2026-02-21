@@ -20,34 +20,89 @@ const CookMode = ({ recipe }: CookModeProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  const speak = useCallback((text: string) => {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+  // ElevenLabs TTS
+  const speak = useCallback(async (text: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsSpeaking(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ text }),
+        }
+      );
+      if (!response.ok) throw new Error("TTS failed");
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+      await audio.play();
+    } catch (err) {
+      console.error("Voice error:", err);
+      setIsSpeaking(false);
+      toast.error("Voice narration failed. Try again.");
+    }
   }, []);
 
   const stopSpeaking = useCallback(() => {
-    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
     setIsSpeaking(false);
   }, []);
 
+  // Narrate a step with Gemini-generated interactive narration + ElevenLabs voice
+  const narrateStep = useCallback(async (stepIndex: number) => {
+    setIsThinking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("smartcart-ai", {
+        body: {
+          action: "cook_step_narration",
+          recipeName: recipe.name,
+          recipeSteps: recipe.steps,
+          currentStepIndex: stepIndex,
+        },
+      });
+      if (error) throw error;
+      const narration = data?.narration || `Step ${stepIndex + 1}: ${recipe.steps[stepIndex]}`;
+      setChatMessages(prev => [...prev, { role: "assistant", text: narration }]);
+      await speak(narration);
+    } catch (err) {
+      console.error("Narration error:", err);
+      // Fallback to plain step text
+      await speak(`Step ${stepIndex + 1}: ${recipe.steps[stepIndex]}`);
+    } finally {
+      setIsThinking(false);
+    }
+  }, [recipe, speak]);
+
+  // Ask Gemini a question, speak the response via ElevenLabs
   const askGemini = useCallback(async (userMessage: string) => {
     setChatMessages(prev => [...prev, { role: "user", text: userMessage }]);
     setIsThinking(true);
-
     try {
       const { data, error } = await supabase.functions.invoke("smartcart-ai", {
         body: {
@@ -58,65 +113,46 @@ const CookMode = ({ recipe }: CookModeProps) => {
           currentStepIndex: currentStep,
         },
       });
-
       if (error) throw error;
-
-      // The response might be JSON with a "raw" field or structured
-      const reply = data?.raw || data?.choices?.[0]?.message?.content || 
-        (typeof data === "string" ? data : JSON.stringify(data));
-
+      const reply = data?.raw || (typeof data === "string" ? data : JSON.stringify(data));
       setChatMessages(prev => [...prev, { role: "assistant", text: reply }]);
-      speak(reply);
+      if (voiceEnabled) await speak(reply);
     } catch (err: any) {
       console.error("Chat error:", err);
-      const errorMsg = "Sorry, I couldn't process that. Try again!";
-      setChatMessages(prev => [...prev, { role: "assistant", text: errorMsg }]);
+      setChatMessages(prev => [...prev, { role: "assistant", text: "Sorry, I couldn't process that. Try again!" }]);
       toast.error("Failed to get response");
     } finally {
       setIsThinking(false);
     }
-  }, [recipe, currentStep, speak]);
+  }, [recipe, currentStep, speak, voiceEnabled]);
 
+  // Browser SpeechRecognition for mic input
   const startListening = useCallback(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast.error("Speech recognition not supported in this browser.");
       return;
     }
-
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      setTranscript("");
-    };
-
+    recognition.onstart = () => { setIsListening(true); setTranscript(""); };
     recognition.onresult = (event: any) => {
       const result = event.results[event.results.length - 1];
       setTranscript(result[0].transcript);
-
       if (result.isFinal) {
         const finalText = result[0].transcript.trim();
         setTranscript("");
-        if (finalText) {
-          askGemini(finalText);
-        }
+        if (finalText) askGemini(finalText);
       }
     };
-
     recognition.onerror = (event: any) => {
       console.error("Speech error:", event.error);
       setIsListening(false);
-      if (event.error !== "no-speech") {
-        toast.error("Microphone error. Please try again.");
-      }
+      if (event.error !== "no-speech") toast.error("Microphone error. Please try again.");
     };
-
     recognition.onend = () => setIsListening(false);
-
     recognitionRef.current = recognition;
     recognition.start();
   }, [askGemini]);
@@ -126,9 +162,19 @@ const CookMode = ({ recipe }: CookModeProps) => {
     setIsListening(false);
   }, []);
 
+  const toggleVoice = () => {
+    if (voiceEnabled) {
+      stopSpeaking();
+      setVoiceEnabled(false);
+    } else {
+      setVoiceEnabled(true);
+      narrateStep(currentStep);
+    }
+  };
+
   const goToStep = (newStep: number) => {
     setCurrentStep(newStep);
-    speak(`Step ${newStep + 1}: ${recipe.steps[newStep]}`);
+    if (voiceEnabled) narrateStep(newStep);
   };
 
   return (
@@ -141,12 +187,12 @@ const CookMode = ({ recipe }: CookModeProps) => {
       <div className="bg-gradient-hero p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isListening ? "bg-primary-foreground/20 animate-pulse" : "bg-primary-foreground/10"}`}>
-              {isListening ? <Mic className="w-6 h-6 text-primary-foreground" /> : <ChefHat className="w-6 h-6 text-primary-foreground" />}
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isSpeaking ? "bg-primary-foreground/20 animate-pulse" : "bg-primary-foreground/10"}`}>
+              {isSpeaking ? <Volume2 className="w-6 h-6 text-primary-foreground" /> : <ChefHat className="w-6 h-6 text-primary-foreground" />}
             </div>
             <div>
               <h4 className="font-serif font-semibold text-lg text-primary-foreground">🎙️ Cook With Me</h4>
-              <p className="text-sm text-primary-foreground/70">Ask anything while cooking — I'll answer!</p>
+              <p className="text-sm text-primary-foreground/70">AI voice guides you — ask anything while cooking!</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -156,15 +202,16 @@ const CookMode = ({ recipe }: CookModeProps) => {
               </Button>
             )}
             <Button
-              onClick={isListening ? stopListening : startListening}
-              disabled={isThinking}
-              variant={isListening ? "destructive" : "default"}
-              className={isListening ? "" : "bg-primary-foreground text-primary"}
+              onClick={toggleVoice}
+              variant={voiceEnabled ? "destructive" : "default"}
+              className={voiceEnabled ? "" : "bg-primary-foreground text-primary"}
             >
-              {isListening ? (
-                <><MicOff className="w-4 h-4 mr-2" />Stop</>
+              {isSpeaking ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Speaking...</>
+              ) : voiceEnabled ? (
+                <><VolumeX className="w-4 h-4 mr-2" />Stop Voice</>
               ) : (
-                <><Mic className="w-4 h-4 mr-2" />Ask AI</>
+                <><Volume2 className="w-4 h-4 mr-2" />Start Voice</>
               )}
             </Button>
           </div>
@@ -187,15 +234,23 @@ const CookMode = ({ recipe }: CookModeProps) => {
           {recipe.steps[currentStep]}
         </motion.p>
 
-        <div className="flex gap-3 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6">
           <Button variant="outline" disabled={currentStep === 0} onClick={() => goToStep(currentStep - 1)}>
             Previous
           </Button>
           <Button disabled={currentStep === recipe.steps.length - 1} onClick={() => goToStep(currentStep + 1)} className="bg-gradient-hero">
             Next Step
           </Button>
-          <Button variant="outline" onClick={() => speak(recipe.steps[currentStep])} disabled={isSpeaking}>
-            <Volume2 className="w-4 h-4 mr-2" /> Read Aloud
+          <Button
+            onClick={isListening ? stopListening : startListening}
+            disabled={isThinking}
+            variant={isListening ? "destructive" : "outline"}
+          >
+            {isListening ? (
+              <><MicOff className="w-4 h-4 mr-2" />Stop</>
+            ) : (
+              <><Mic className="w-4 h-4 mr-2" />Ask AI</>
+            )}
           </Button>
         </div>
 
