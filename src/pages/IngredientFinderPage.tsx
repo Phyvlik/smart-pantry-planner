@@ -168,7 +168,7 @@ export default function IngredientFinderPage() {
     const best = getBestProduct(ing);
     return sum + (best?.price ?? 0);
   }, 0);
-  const availableCount = missingIngredients.filter((ing) => getBestProduct(ing)?.available === true).length;
+  const availableCount = missingIngredients.filter((ing) => getBestProduct(ing) != null).length;
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -315,7 +315,8 @@ export default function IngredientFinderPage() {
                     {missingIngredients.map((ingName) => {
                       const loaded = ingName in products;
                       const best = getBestProduct(ingName);
-                      const isAvailable = best?.available === true;
+                      const hasProduct = loaded && best != null;
+                      const notFound = loaded && !best;
 
                       return (
                         <div key={ingName} className="py-2 px-3 rounded-lg bg-muted/30">
@@ -323,13 +324,13 @@ export default function IngredientFinderPage() {
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               {!loaded ? (
                                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
-                              ) : isAvailable || (best?.price != null) ? (
+                              ) : hasProduct ? (
                                 <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                               ) : (
                                 <XCircle className="w-4 h-4 text-destructive shrink-0" />
                               )}
                               <div className="min-w-0">
-                                <span className={`text-sm ${!loaded ? "text-muted-foreground" : (isAvailable || best?.price != null) ? "" : "text-muted-foreground"}`}>
+                                <span className={`text-sm ${!loaded ? "text-muted-foreground" : hasProduct ? "" : "text-muted-foreground"}`}>
                                   {ingName}
                                 </span>
                                 {best && (
@@ -344,13 +345,14 @@ export default function IngredientFinderPage() {
                                 <Skeleton className="h-5 w-14" />
                               ) : best?.price != null ? (
                                 <span className="font-semibold text-sm">${best.price.toFixed(2)}</span>
+                              ) : hasProduct ? (
+                                <Badge variant="outline" className="text-xs">Price in store</Badge>
                               ) : (
-                                <span className="text-xs text-destructive">Unavailable</span>
+                                <span className="text-xs text-destructive">Not found</span>
                               )}
                             </div>
                           </div>
-                          {/* Suggestion for unavailable items */}
-                          {loaded && !isAvailable && best?.price == null && (
+                          {notFound && (
                             <p className="text-xs text-muted-foreground mt-1 ml-6 italic">
                               💡 Try substituting with a similar ingredient or check another store
                             </p>
