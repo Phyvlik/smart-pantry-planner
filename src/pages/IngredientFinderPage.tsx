@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store, DollarSign } from "lucide-react";
-import { StorePricesPanel } from "@/components/StorePricesPanel";
+import { ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search } from "lucide-react";
+import { BestPricesPanel } from "@/components/BestPricesPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ async function krogerFetch(action: string, params: Record<string, string> = {}) 
   return res.json();
 }
 
-type Step = "ingredients" | "stores" | "prices";
+type Step = "ingredients" | "prices";
 
 export default function IngredientFinderPage() {
   const location = useLocation();
@@ -41,9 +41,8 @@ export default function IngredientFinderPage() {
 
   const [step, setStep] = useState<Step>("ingredients");
   const [zip, setZip] = useState("");
-  const [locations, setLocations] = useState<KrogerLocation[]>([]);
-  const [selectedStore, setSelectedStore] = useState<KrogerLocation | null>(null);
-  const [isSearchingStores, setIsSearchingStores] = useState(false);
+  const [nearestStore, setNearestStore] = useState<KrogerLocation | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [missingIngredients, setMissingIngredients] = useState<string[]>([]);
 
   useEffect(() => {
@@ -54,31 +53,26 @@ export default function IngredientFinderPage() {
     setMissingIngredients((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
   };
 
-  const searchStores = useCallback(async () => {
+  const findBestPrices = useCallback(async () => {
     if (!/^\d{5}$/.test(zip)) { toast.error("Please enter a valid 5-digit ZIP code."); return; }
     if (missingIngredients.length === 0) { toast.error("No missing ingredients selected."); return; }
-    setIsSearchingStores(true);
+    setIsSearching(true);
     try {
       const { locations: locs } = await krogerFetch("locations", { zip });
       if (!locs || locs.length === 0) { toast.error("No stores found near that ZIP code."); return; }
-      setLocations(locs);
-      setStep("stores");
+      setNearestStore(locs[0]);
+      setStep("prices");
     } catch (err: any) {
       toast.error(err.message || "Failed to search stores.");
     } finally {
-      setIsSearchingStores(false);
+      setIsSearching(false);
     }
   }, [zip, missingIngredients]);
 
-  const selectStore = useCallback((store: KrogerLocation) => {
-    setSelectedStore(store);
-    setStep("prices");
-  }, []);
-
   const handleBuyFromStore = () => {
-    if (selectedStore && recipe) {
-      localStorage.setItem("smartcart_selected_store", JSON.stringify({ storeName: selectedStore.name, ingredients: missingIngredients }));
-      navigate("/cook", { state: { recipe, fromStore: selectedStore.name } });
+    if (nearestStore && recipe) {
+      localStorage.setItem("smartcart_selected_store", JSON.stringify({ storeName: nearestStore.name, ingredients: missingIngredients }));
+      navigate("/cook", { state: { recipe, fromStore: nearestStore.name } });
     }
   };
 
@@ -113,8 +107,7 @@ export default function IngredientFinderPage() {
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
         <button onClick={() => {
-          if (step === "prices") setStep("stores");
-          else if (step === "stores") { setStep("ingredients"); setLocations([]); }
+          if (step === "prices") { setStep("ingredients"); setNearestStore(null); }
           else navigate(-1);
         }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
@@ -129,7 +122,6 @@ export default function IngredientFinderPage() {
         </div>
 
         <AnimatePresence mode="wait">
-          {/* Step 1: Select missing ingredients + ZIP */}
           {step === "ingredients" && (
             <motion.div key="ingredients" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
               <div className="glass-card p-6">
@@ -181,59 +173,22 @@ export default function IngredientFinderPage() {
               </div>
 
               <Button
-                onClick={searchStores}
-                disabled={isSearchingStores || zip.length !== 5 || missingIngredients.length === 0}
+                onClick={findBestPrices}
+                disabled={isSearching || zip.length !== 5 || missingIngredients.length === 0}
                 className="w-full bg-gradient-hero rounded-xl h-12 text-base"
               >
-                {isSearchingStores ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Searching...</> : <><Search className="w-4 h-4 mr-2" /> Find Stores Near Me</>}
+                {isSearching ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Finding best prices...</> : <><Search className="w-4 h-4 mr-2" /> Find Best Prices</>}
               </Button>
             </motion.div>
           )}
 
-          {/* Step 2: Pick a store */}
-          {step === "stores" && (
-            <motion.div key="stores" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <p className="text-sm text-muted-foreground text-center mb-2">
-                {locations.length} stores found near {zip}
-              </p>
-              <p className="text-xs text-muted-foreground text-center mb-6">
-                Pick a store — we'll compare its prices with Walmart automatically.
-              </p>
-              <div className="space-y-3">
-                {locations.map((loc, idx) => (
-                  <motion.button
-                    key={loc.locationId}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.06 }}
-                    onClick={() => selectStore(loc)}
-                    className="w-full glass-card p-5 flex items-center gap-4 text-left hover:ring-2 hover:ring-primary/40 transition-all"
-                  >
-                    <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <Store className="w-7 h-7 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold">{loc.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">{loc.address}</div>
-                      <Badge variant="outline" className="text-xs mt-1 rounded-full">{loc.chain}</Badge>
-                    </div>
-                    <div className="flex items-center gap-1 text-primary font-medium text-sm shrink-0">
-                      <DollarSign className="w-4 h-4" /> Compare
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Step 3: Prices */}
-          {step === "prices" && selectedStore && (
-            <StorePricesPanel
+          {step === "prices" && nearestStore && (
+            <BestPricesPanel
               recipe={recipe}
               missingIngredients={missingIngredients}
-              selectedStore={selectedStore}
+              nearestStore={nearestStore}
               onBuy={handleBuyFromStore}
-              onBack={() => setStep("stores")}
+              onBack={() => { setStep("ingredients"); setNearestStore(null); }}
             />
           )}
         </AnimatePresence>
