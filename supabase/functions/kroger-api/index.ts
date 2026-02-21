@@ -124,7 +124,7 @@ serve(async (req) => {
 
       // Score products by relevance, then pick the CHEAPEST relevant ones
       const searchLower = searchTerm.toLowerCase();
-      const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 2);
+      const keywords = searchLower.split(/\s+/).filter((w: string) => w.length > 1);
 
       const candidates = (data.data || []).map((p: any) => {
         const item = p.items?.[0];
@@ -134,13 +134,16 @@ serve(async (req) => {
         let relevance = 0;
 
         // Exact match boost
-        if (desc.includes(searchLower)) relevance += 10;
+        if (desc.includes(searchLower)) relevance += 15;
 
-        // Keyword match
+        // Keyword match — ALL keywords must appear for strong relevance
+        let kwMatches = 0;
         for (const kw of keywords) {
-          if (desc.includes(kw)) relevance += 3;
-          if (cat.includes(kw)) relevance += 1;
+          if (desc.includes(kw)) { relevance += 3; kwMatches++; }
+          else if (cat.includes(kw)) { relevance += 1; kwMatches++; }
         }
+        // Bonus if ALL keywords match
+        if (keywords.length > 0 && kwMatches === keywords.length) relevance += 5;
 
         // Penalize non-grocery items
         const nonFoodTerms = ["baby food", "baby puree", "teether", "formula", "cleaning", "detergent", "shampoo", "soap", "lotion", "diaper", "pet food", "dog food", "cat food", "supplement", "vitamin"];
@@ -149,7 +152,15 @@ serve(async (req) => {
         }
         if (desc.includes("baby") && !searchLower.includes("baby")) relevance -= 5;
 
-        const price = item?.price?.regular ?? item?.price?.promo ?? null;
+        // Penalize products that are clearly a different category
+        // e.g., "almonds" when searching "soy sauce", "spread" when searching "oil"
+        const descWords = desc.split(/\s+/);
+        const searchWords = new Set(searchLower.split(/\s+/));
+        const extraWords = descWords.filter((w: string) => w.length > 3 && !searchWords.has(w));
+        // If most of the product name is unrelated words, penalize
+        if (extraWords.length > descWords.length * 0.6) relevance -= 3;
+
+        const price = item?.price?.promo ?? item?.price?.regular ?? null;
         const isAvailable = !!(price || item?.fulfillment?.inStore || p.productId);
 
         return {
@@ -162,11 +173,18 @@ serve(async (req) => {
           _relevance: relevance,
         };
       })
-      // Only keep relevant results with a valid price
-      .filter((p: any) => p._relevance >= 3 && p.price != null && p.price > 0);
+      // Must have minimum relevance
+      .filter((p: any) => p._relevance >= 5);
 
-      // Sort by cheapest price first (affordability is king)
-      candidates.sort((a: any, b: any) => a.price - b.price);
+      // Sort: priced items first by cheapest, then unpriced items by relevance
+      candidates.sort((a: any, b: any) => {
+        const aHasPrice = a.price != null && a.price > 0;
+        const bHasPrice = b.price != null && b.price > 0;
+        if (aHasPrice && bHasPrice) return a.price - b.price;
+        if (aHasPrice && !bHasPrice) return -1;
+        if (!aHasPrice && bHasPrice) return 1;
+        return b._relevance - a._relevance;
+      });
       const products = candidates.slice(0, 3).map(({ _relevance, ...rest }: any) => rest);
 
       return new Response(JSON.stringify({ products }), {
