@@ -287,28 +287,35 @@ export default function IngredientFinderPage() {
                       <div className="grid gap-1">
                         {missingIngredients.map((ingName) => {
                           const prods = sr.products[ingName] || [];
-                          const bestProduct = prods[0];
-                          const isAvailable = bestProduct?.available !== false && !!bestProduct;
+                          // Pick best product: prefer available with price, then available, then any with price
+                          const bestProduct = prods.find((p) => p.available === true && p.price != null)
+                            || prods.find((p) => p.available === true)
+                            || prods.find((p) => p.price != null)
+                            || prods[0];
+                          const isAvailable = bestProduct?.available === true;
+                          const hasProduct = !!bestProduct;
 
                           return (
                             <div key={ingName} className="flex items-center justify-between py-1.5 px-2 text-sm">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
                                 {isAvailable ? (
                                   <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                                ) : hasProduct ? (
+                                  <XCircle className="w-4 h-4 text-amber-500 shrink-0" />
                                 ) : (
                                   <XCircle className="w-4 h-4 text-destructive shrink-0" />
                                 )}
-                                <span className={!isAvailable ? "line-through text-muted-foreground" : ""}>
+                                <span className={!isAvailable ? "text-muted-foreground" : ""}>
                                   {ingName}
                                 </span>
                                 {bestProduct && (
                                   <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                    — {bestProduct.brand} {bestProduct.size}
+                                    — {bestProduct.name}
                                   </span>
                                 )}
                               </div>
-                              <span className="text-muted-foreground font-medium">
-                                {bestProduct?.price != null ? `$${bestProduct.price.toFixed(2)}` : "N/A"}
+                              <span className="text-muted-foreground font-medium shrink-0 ml-2">
+                                {bestProduct?.price != null ? `$${bestProduct.price.toFixed(2)}` : isAvailable ? "In stock" : hasProduct ? "Unavailable" : "Not found"}
                               </span>
                             </div>
                           );
