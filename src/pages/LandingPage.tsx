@@ -90,8 +90,8 @@ export default function LandingPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 { icon: <ChefHat className="w-7 h-7" />, title: "AI Recipes", desc: "Enter a dish, get a complete recipe with ingredients and costs.", emoji: "🧑‍🍳" },
-                { icon: <DollarSign className="w-7 h-7" />, title: "Price Compare", desc: "Find the cheapest prices at Kroger, Walmart, and more.", emoji: "💰" },
-                { icon: <Mic className="w-7 h-7" />, title: "Voice Cooking", desc: "Hands-free step-by-step guidance with AI voice narration.", emoji: "🎙️" },
+                { icon: <DollarSign className="w-7 h-7" />, title: "Price Compare", desc: "Find the cheapest prices at Kroger, Walmart, and Harris Teeter.", emoji: "💰" },
+                { icon: <Mic className="w-7 h-7" />, title: "Voice Cooking", desc: "Step-by-step guidance powered by Gemini AI and ElevenLabs voice.", emoji: "🎙️" },
                 { icon: <MapPin className="w-7 h-7" />, title: "Nearby Stores", desc: "Locate stores near you and check real-time availability.", emoji: "📍" },
               ].map((feature, i) => (
                 <motion.div
@@ -128,7 +128,7 @@ export default function LandingPage() {
               {[
                 { step: "01", title: "Tell me what you're craving", desc: "Type a dish or pick from ideas. AI generates a full recipe with costs.", emoji: "💬" },
                 { step: "02", title: "Check your pantry & find deals", desc: "Mark what you have, find missing items at the best price nearby.", emoji: "🛒" },
-                { step: "03", title: "Cook with your AI companion", desc: "Follow guided steps with voice narration. Ask questions hands-free.", emoji: "🎙️" },
+                { step: "03", title: "Cook with your AI companion", desc: "Follow guided steps with Gemini AI recipes and ElevenLabs voice narration.", emoji: "🎙️" },
               ].map((item, i) => (
                 <motion.div
                   key={item.step}
