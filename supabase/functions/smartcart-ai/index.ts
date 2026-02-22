@@ -85,7 +85,7 @@ Only return valid JSON, nothing else.`;
         throw new Error("Invalid action");
     }
 
-    const models = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
     const requestBody = JSON.stringify({
       contents: [
         { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
