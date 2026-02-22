@@ -85,27 +85,38 @@ Only return valid JSON, nothing else.`;
         throw new Error("Invalid action");
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`,
-      {
+    const models = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
+    const requestBody = JSON.stringify({
+      contents: [
+        { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+      },
+    });
+
+    let response: Response | null = null;
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-          },
-        }),
+        body: requestBody,
+      });
+      if (res.ok) {
+        response = res;
+        console.log(`Success with model: ${model}`);
+        break;
       }
-    );
-
-    if (!response.ok) {
-      const t = await response.text();
-      console.error("Gemini API error:", response.status, t);
-      throw new Error(`Gemini API error: ${response.status}`);
+      const t = await res.text();
+      console.warn(`Model ${model} failed (${res.status}), trying next...`, t.slice(0, 200));
+      if (res.status !== 429 && res.status !== 503) {
+        throw new Error(`Gemini API error: ${res.status}`);
+      }
+    }
+    if (!response) {
+      throw new Error("All Gemini models are currently unavailable. Please try again in a moment.");
     }
 
     const data = await response.json();
