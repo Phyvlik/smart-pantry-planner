@@ -30,7 +30,12 @@ export default function CookPage() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setRecipe(data as Recipe);
+      const recipeData = data as Recipe;
+      if (!recipeData?.steps?.length || !recipeData?.ingredients?.length) {
+        throw new Error("Invalid recipe generated. Please try again.");
+      }
+      recipeData.tips = recipeData.tips || [];
+      setRecipe(recipeData);
       setStep("confirm");
       toast.success("Recipe ready! 🎉");
     } catch (err: any) {
