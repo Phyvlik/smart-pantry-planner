@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search } from "lucide-react";
+import { ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store } from "lucide-react";
 import { BestPricesPanel } from "@/components/BestPricesPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ async function krogerFetch(action: string, params: Record<string, string> = {}) 
   return res.json();
 }
 
-type Step = "ingredients" | "prices";
+type Step = "ingredients" | "store-select" | "prices";
 
 export default function IngredientFinderPage() {
   const location = useLocation();
@@ -41,7 +41,8 @@ export default function IngredientFinderPage() {
 
   const [step, setStep] = useState<Step>("ingredients");
   const [zip, setZip] = useState("");
-  const [nearestStore, setNearestStore] = useState<KrogerLocation | null>(null);
+  const [stores, setStores] = useState<KrogerLocation[]>([]);
+  const [selectedStore, setSelectedStore] = useState<KrogerLocation | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [missingIngredients, setMissingIngredients] = useState<string[]>([]);
 
@@ -53,15 +54,15 @@ export default function IngredientFinderPage() {
     setMissingIngredients((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
   };
 
-  const findBestPrices = useCallback(async () => {
+  const findStores = useCallback(async () => {
     if (!/^\d{5}$/.test(zip)) { toast.error("Please enter a valid 5-digit ZIP code."); return; }
     if (missingIngredients.length === 0) { toast.error("No missing ingredients selected."); return; }
     setIsSearching(true);
     try {
       const { locations: locs } = await krogerFetch("locations", { zip });
       if (!locs || locs.length === 0) { toast.error("No stores found near that ZIP code."); return; }
-      setNearestStore(locs[0]);
-      setStep("prices");
+      setStores(locs);
+      setStep("store-select");
     } catch (err: any) {
       toast.error(err.message || "Failed to search stores.");
     } finally {
@@ -69,11 +70,22 @@ export default function IngredientFinderPage() {
     }
   }, [zip, missingIngredients]);
 
+  const selectStore = (store: KrogerLocation) => {
+    setSelectedStore(store);
+    setStep("prices");
+  };
+
   const handleBuyFromStore = () => {
-    if (nearestStore && recipe) {
-      localStorage.setItem("smartcart_selected_store", JSON.stringify({ storeName: nearestStore.name, ingredients: missingIngredients }));
-      navigate("/cook", { state: { recipe, fromStore: nearestStore.name } });
+    if (selectedStore && recipe) {
+      localStorage.setItem("smartcart_selected_store", JSON.stringify({ storeName: selectedStore.name, ingredients: missingIngredients }));
+      navigate("/cook", { state: { recipe, fromStore: selectedStore.name } });
     }
+  };
+
+  const goBack = () => {
+    if (step === "prices") { setStep("store-select"); setSelectedStore(null); }
+    else if (step === "store-select") { setStep("ingredients"); setStores([]); }
+    else navigate(-1);
   };
 
   if (!recipe) {
@@ -106,10 +118,7 @@ export default function IngredientFinderPage() {
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-8">
-        <button onClick={() => {
-          if (step === "prices") { setStep("ingredients"); setNearestStore(null); }
-          else navigate(-1);
-        }} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors">
+        <button onClick={goBack} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
@@ -173,28 +182,58 @@ export default function IngredientFinderPage() {
               </div>
 
               <Button
-                onClick={findBestPrices}
+                onClick={findStores}
                 disabled={isSearching || zip.length !== 5 || missingIngredients.length === 0}
                 className="w-full bg-gradient-hero rounded-xl h-12 text-base"
               >
-                {isSearching ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Finding best prices...</> : <><Search className="w-4 h-4 mr-2" /> Find Best Prices</>}
+                {isSearching ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Finding nearby stores...</> : <><Search className="w-4 h-4 mr-2" /> Find Nearby Stores</>}
               </Button>
             </motion.div>
           )}
 
-          {step === "prices" && nearestStore && (
+          {step === "store-select" && (
+            <motion.div key="store-select" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
+              <div className="glass-card p-6">
+                <h3 className="font-serif font-semibold mb-4 flex items-center gap-2">
+                  <Store className="w-5 h-5 text-primary" /> Select a Store
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {stores.length} store{stores.length !== 1 ? "s" : ""} found near {zip}
+                </p>
+                <div className="grid gap-3">
+                  {stores.map((store) => (
+                    <button
+                      key={store.locationId}
+                      onClick={() => selectStore(store)}
+                      className="flex items-center gap-4 p-4 rounded-xl bg-muted/50 border border-transparent hover:border-primary/30 hover:bg-primary/5 transition-all text-left"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Store className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{store.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{store.address}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {step === "prices" && selectedStore && (
             <BestPricesPanel
               recipe={recipe}
               missingIngredients={missingIngredients}
-              nearestStore={nearestStore}
+              nearestStore={selectedStore}
               onBuy={handleBuyFromStore}
-              onBack={() => { setStep("ingredients"); setNearestStore(null); }}
+              onBack={() => { setStep("store-select"); setSelectedStore(null); }}
             />
           )}
         </AnimatePresence>
 
         <p className="text-xs text-muted-foreground mt-8 text-center">
-          Powered by Kroger & Walmart APIs. Prices may vary.
+          Powered by Kroger API. Prices may vary by location.
         </p>
       </main>
     </div>

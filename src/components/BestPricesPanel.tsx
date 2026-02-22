@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { CheckCircle2, XCircle, ShoppingCart, TrendingDown, Store } from "lucide-react";
+import { CheckCircle2, XCircle, ShoppingCart, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import type { Recipe } from "@/components/RecipeCard";
 
@@ -41,9 +40,9 @@ async function apiFetch(fnName: string, body: Record<string, string>) {
 
 function getBestProduct(products: StoreProduct[]): StoreProduct | null {
   return (
-    products.find((p) => p.available === true && p.price != null) ||
+    products.find((p) => p.available === true && p.price != null && p.price > 0) ||
     products.find((p) => p.available === true) ||
-    products.find((p) => p.price != null) ||
+    products.find((p) => p.price != null && p.price > 0) ||
     products[0] || null
   );
 }
@@ -77,9 +76,7 @@ interface BestPricesPanelProps {
 export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBuy, onBack }: BestPricesPanelProps) {
   const storeName = nearestStore.name.split("–")[0].trim();
   const [krogerData, setKrogerData] = useState<Record<string, StoreProduct[]>>({});
-  const [walmartData, setWalmartData] = useState<Record<string, StoreProduct[]>>({});
-  const [isLoadingKroger, setIsLoadingKroger] = useState(true);
-  const [isLoadingWalmart, setIsLoadingWalmart] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const hasStarted = useState(false);
   if (!hasStarted[0]) {
@@ -91,117 +88,60 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
           setKrogerData((prev) => ({ ...prev, [ing]: products || [] }));
         } catch { setKrogerData((prev) => ({ ...prev, [ing]: [] })); }
       }
-      setIsLoadingKroger(false);
-    })();
-    (async () => {
-      for (const ing of missingIngredients) {
-        try {
-          const { products } = await apiFetch("walmart-api", { action: "products", q: ing });
-          setWalmartData((prev) => ({ ...prev, [ing]: products || [] }));
-        } catch { setWalmartData((prev) => ({ ...prev, [ing]: [] })); }
-      }
-      setIsLoadingWalmart(false);
+      setIsLoading(false);
     })();
   }
 
-  const isLoading = isLoadingKroger || isLoadingWalmart;
-
-  const krogerPricedItems = missingIngredients.filter((ing) => {
+  const pricedItems = missingIngredients.filter((ing) => {
     const best = getBestProduct(krogerData[ing] || []);
     return best?.price != null && best.price > 0;
   });
-  const krogerTotal = krogerPricedItems.reduce((sum, ing) => {
+  const total = pricedItems.reduce((sum, ing) => {
     const best = getBestProduct(krogerData[ing] || []);
     return sum + (best?.price ?? 0);
   }, 0);
-  const krogerHasPrices = krogerPricedItems.length > 0;
-
-  const walmartPricedItems = missingIngredients.filter((ing) => {
-    const best = getBestProduct(walmartData[ing] || []);
-    return best?.price != null && best.price > 0;
-  });
-  const walmartTotal = walmartPricedItems.reduce((sum, ing) => {
-    const best = getBestProduct(walmartData[ing] || []);
-    return sum + (best?.price ?? 0);
-  }, 0);
-  const walmartHasPrices = walmartPricedItems.length > 0;
-
-  const krogerCheaper = !isLoading && krogerHasPrices && walmartHasPrices && krogerTotal <= walmartTotal;
-  const walmartCheaper = !isLoading && walmartHasPrices && krogerHasPrices && walmartTotal < krogerTotal;
+  const hasPrices = pricedItems.length > 0;
 
   return (
     <motion.div key="prices" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-5">
-      {/* Store headers - side by side */}
+      {/* Store header */}
       {!isLoading && (
         <div className="glass-card p-5">
-          <h3 className="font-serif font-semibold mb-4 flex items-center gap-2">
-            <TrendingDown className="w-5 h-5 text-primary" /> Side-by-Side Comparison
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className={`p-4 rounded-2xl text-center transition-all ${krogerCheaper ? "bg-success/10 ring-2 ring-success/30" : "bg-muted/50"}`}>
-              <span className="text-3xl">🟡</span>
-              <p className="font-medium text-sm mt-2">{storeName}</p>
-              <p className={`font-bold text-xl mt-1 ${krogerCheaper ? "text-success" : ""}`}>
-                {krogerHasPrices ? `$${krogerTotal.toFixed(2)}` : <span className="text-muted-foreground text-sm">No prices available</span>}
-              </p>
-              {krogerCheaper && (
-                <Badge className="bg-success text-success-foreground text-xs mt-2 rounded-full">Cheaper 🏆</Badge>
-              )}
-            </div>
-            <div className={`p-4 rounded-2xl text-center transition-all ${walmartCheaper ? "bg-success/10 ring-2 ring-success/30" : "bg-muted/50"}`}>
-              <span className="text-3xl">🔵</span>
-              <p className="font-medium text-sm mt-2">Walmart</p>
-              <p className={`font-bold text-xl mt-1 ${walmartCheaper ? "text-success" : ""}`}>
-                {walmartHasPrices ? `$${walmartTotal.toFixed(2)}` : <span className="text-muted-foreground text-sm">No prices available</span>}
-              </p>
-              {walmartCheaper && (
-                <Badge className="bg-success text-success-foreground text-xs mt-2 rounded-full">Cheaper 🏆</Badge>
-              )}
-            </div>
+          <div className="flex items-center gap-3 mb-3">
+            <Store className="w-5 h-5 text-primary" />
+            <h3 className="font-serif font-semibold">Prices at {storeName}</h3>
           </div>
-          {krogerHasPrices && walmartHasPrices && Math.abs(krogerTotal - walmartTotal) > 0.01 && (
-            <p className="text-sm text-center text-muted-foreground mt-3">
-              Save <span className="font-semibold text-success">${Math.abs(krogerTotal - walmartTotal).toFixed(2)}</span> at{" "}
-              <span className="font-semibold">{krogerCheaper ? storeName : "Walmart"}</span>
+          <p className="text-sm text-muted-foreground">{nearestStore.address}</p>
+          {hasPrices && (
+            <p className="text-2xl font-bold mt-3">
+              Estimated Total: <span className="text-success">${total.toFixed(2)}</span>
             </p>
           )}
         </div>
       )}
 
-      {/* Side-by-side ingredient rows */}
+      {/* Ingredient rows */}
       <div className="glass-card p-5">
         <h3 className="font-serif font-semibold mb-4">Price Breakdown</h3>
 
-        {/* Column headers */}
-        <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center pb-3 mb-3 border-b border-border text-xs font-medium text-muted-foreground">
+        <div className="grid grid-cols-[1fr_auto] gap-x-3 items-center pb-3 mb-3 border-b border-border text-xs font-medium text-muted-foreground">
           <span>Ingredient</span>
-          <span className="w-24 text-center">🟡 {storeName}</span>
-          <span className="w-24 text-center">🔵 Walmart</span>
+          <span className="w-24 text-center">Price</span>
         </div>
 
         <div className="grid gap-2">
           {missingIngredients.map((ingName) => {
-            const krogerLoaded = ingName in krogerData;
-            const walmartLoaded = ingName in walmartData;
-            const krogerBest = getBestProduct(krogerData[ingName] || []);
-            const walmartBest = getBestProduct(walmartData[ingName] || []);
-            const krogerPrice = krogerBest?.price ?? null;
-            const walmartPrice = walmartBest?.price ?? null;
-
-            const isCheaperKroger = krogerPrice != null && walmartPrice != null && krogerPrice <= walmartPrice;
-            const isCheaperWalmart = walmartPrice != null && krogerPrice != null && walmartPrice < krogerPrice;
-
-            // Pick whichever has an image
-            const displayImage = krogerBest?.image || walmartBest?.image;
-            const anyFound = krogerBest || walmartBest;
-            const noneFound = krogerLoaded && walmartLoaded && !anyFound;
+            const loaded = ingName in krogerData;
+            const best = getBestProduct(krogerData[ingName] || []);
+            const price = best?.price ?? null;
+            const displayImage = best?.image;
+            const noneFound = loaded && !best;
 
             return (
               <div key={ingName} className="py-3 px-3 rounded-xl bg-muted/30">
-                <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center">
-                  {/* Ingredient info */}
+                <div className="grid grid-cols-[1fr_auto] gap-x-3 items-center">
                   <div className="flex items-center gap-3 min-w-0">
-                    {(!krogerLoaded && !walmartLoaded) ? (
+                    {!loaded ? (
                       <Skeleton className="w-10 h-10 rounded-lg shrink-0" />
                     ) : displayImage ? (
                       <img
@@ -211,35 +151,23 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
                     ) : (
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${anyFound ? "bg-success/10" : "bg-destructive/10"}`}>
-                        {anyFound ? <CheckCircle2 className="w-4 h-4 text-success" /> : <XCircle className="w-4 h-4 text-destructive" />}
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${best ? "bg-success/10" : "bg-destructive/10"}`}>
+                        {best ? <CheckCircle2 className="w-4 h-4 text-success" /> : <XCircle className="w-4 h-4 text-destructive" />}
                       </div>
                     )}
                     <div className="min-w-0">
                       <span className="text-sm font-medium block truncate">{ingName}</span>
-                      {krogerBest && (
-                        <p className="text-[11px] text-muted-foreground truncate">{krogerBest.name}</p>
+                      {best && (
+                        <p className="text-[11px] text-muted-foreground truncate">{best.name}</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Kroger price */}
-                  <div className={`w-24 text-center py-1.5 rounded-lg text-sm ${isCheaperKroger ? "bg-success/10 font-bold text-success" : ""}`}>
-                    {!krogerLoaded ? (
+                  <div className="w-24 text-center py-1.5 rounded-lg text-sm">
+                    {!loaded ? (
                       <Skeleton className="h-5 w-12 mx-auto" />
-                    ) : krogerPrice != null ? (
-                      <span>${krogerPrice.toFixed(2)}</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </div>
-
-                  {/* Walmart price */}
-                  <div className={`w-24 text-center py-1.5 rounded-lg text-sm ${isCheaperWalmart ? "bg-success/10 font-bold text-success" : ""}`}>
-                    {!walmartLoaded ? (
-                      <Skeleton className="h-5 w-12 mx-auto" />
-                    ) : walmartPrice != null ? (
-                      <span>${walmartPrice.toFixed(2)}</span>
+                    ) : price != null && price > 0 ? (
+                      <span className="font-semibold">${price.toFixed(2)}</span>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -256,16 +184,13 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
           })}
         </div>
 
-        {/* Totals row */}
+        {/* Total row */}
         {!isLoading && (
           <div className="mt-4 pt-4 border-t border-border">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center">
+            <div className="grid grid-cols-[1fr_auto] gap-x-3 items-center">
               <span className="font-semibold">Total</span>
-              <span className={`w-24 text-center font-bold text-lg ${krogerCheaper ? "text-success" : ""}`}>
-                {krogerHasPrices ? `$${krogerTotal.toFixed(2)}` : "—"}
-              </span>
-              <span className={`w-24 text-center font-bold text-lg ${walmartCheaper ? "text-success" : ""}`}>
-                {walmartHasPrices ? `$${walmartTotal.toFixed(2)}` : "—"}
+              <span className="w-24 text-center font-bold text-lg">
+                {hasPrices ? `$${total.toFixed(2)}` : "—"}
               </span>
             </div>
           </div>
@@ -280,7 +205,7 @@ export function BestPricesPanel({ recipe, missingIngredients, nearestStore, onBu
       )}
 
       <button onClick={onBack} className="block mx-auto text-sm text-muted-foreground hover:text-foreground transition-colors">
-        ← Change ingredients or ZIP
+        ← Change ingredients or store
       </button>
     </motion.div>
   );
