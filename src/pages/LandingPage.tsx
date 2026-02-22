@@ -84,7 +84,7 @@ export default function LandingPage() {
               className="text-center mb-16"
             >
               <h2 className="text-3xl sm:text-4xl font-serif font-bold mb-4">Everything you need to cook with confidence</h2>
-              <p className="text-muted-foreground max-w-lg mx-auto">From recipe to plate — we handle the planning so you can enjoy the cooking.</p>
+              <p className="text-muted-foreground max-w-lg mx-auto">From recipe to plate, we handle the planning so you can enjoy the cooking.</p>
             </motion.div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
