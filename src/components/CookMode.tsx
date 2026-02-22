@@ -71,7 +71,7 @@ const CookMode = ({ recipe }: CookModeProps) => {
   const narrateStep = useCallback(async (stepIndex: number) => {
     setIsThinking(true);
     try {
-      const { data, error } = await supabase.functions.invoke("smartcart-ai", {
+      const { data, error } = await supabase.functions.invoke("tastestack-ai", {
         body: { action: "cook_step_narration", recipeName: recipe.name, recipeSteps: recipe.steps, currentStepIndex: stepIndex },
       });
       if (error) throw error;
@@ -89,7 +89,7 @@ const CookMode = ({ recipe }: CookModeProps) => {
     setChatMessages(prev => [...prev, { role: "user", text: userMessage }]);
     setIsThinking(true);
     try {
-      const { data, error } = await supabase.functions.invoke("smartcart-ai", {
+      const { data, error } = await supabase.functions.invoke("tastestack-ai", {
         body: { action: "cook_chat", message: userMessage, recipeName: recipe.name, recipeSteps: recipe.steps, currentStepIndex: currentStep },
       });
       if (error) throw error;

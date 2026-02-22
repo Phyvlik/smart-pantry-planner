@@ -77,7 +77,7 @@ export default function IngredientFinderPage() {
 
   const handleBuyFromStore = () => {
     if (selectedStore && recipe) {
-      localStorage.setItem("smartcart_selected_store", JSON.stringify({ storeName: selectedStore.name, ingredients: missingIngredients }));
+      localStorage.setItem("tastestack_selected_store", JSON.stringify({ storeName: selectedStore.name, ingredients: missingIngredients }));
       navigate("/cook", { state: { recipe, fromStore: selectedStore.name } });
     }
   };

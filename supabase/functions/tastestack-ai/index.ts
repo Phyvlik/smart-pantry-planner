@@ -18,7 +18,7 @@ serve(async (req) => {
 
     switch (action) {
       case "generate_recipe":
-        systemPrompt = `You are SmartCart AI, an expert chef and grocery optimizer. Generate a recipe based on the user's request. Return JSON with this exact structure:
+        systemPrompt = `You are TasteStack AI, an expert chef and grocery optimizer. Generate a recipe based on the user's request. Return JSON with this exact structure:
 {
   "name": "Recipe Name",
   "servings": 4,
@@ -38,7 +38,7 @@ Only return valid JSON, nothing else.`;
         break;
 
       case "optimize_recipe":
-        systemPrompt = `You are SmartCart AI, a budget-optimization expert. Analyze the recipe and suggest cost-saving substitutions. Return JSON:
+        systemPrompt = `You are TasteStack AI, a budget-optimization expert. Analyze the recipe and suggest cost-saving substitutions. Return JSON:
 {
   "substitutions": [
     {"original": "ingredient", "substitute": "alternative", "savings": 1.50, "reason": "explanation"}
@@ -51,7 +51,7 @@ Only return valid JSON, nothing else.`;
         break;
 
       case "analyze_pantry":
-        systemPrompt = `You are SmartCart AI. Based on the pantry items described, identify all ingredients and suggest dishes. Return JSON:
+        systemPrompt = `You are TasteStack AI. Based on the pantry items described, identify all ingredients and suggest dishes. Return JSON:
 {
   "identifiedItems": ["item1", "item2"],
   "suggestedDishes": [
@@ -119,7 +119,6 @@ Only return valid JSON, nothing else.`;
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
 
-    // Parse JSON from the response
     let parsed;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -132,7 +131,7 @@ Only return valid JSON, nothing else.`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("smartcart-ai error:", e);
+    console.error("tastestack-ai error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

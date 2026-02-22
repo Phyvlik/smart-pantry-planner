@@ -1,6 +1,6 @@
 project_id = "eminvqqyupgxdqjtdjqb"
 
-[functions.smartcart-ai]
+[functions.tastestack-ai]
 verify_jwt = false
 
 [functions.elevenlabs-tts]

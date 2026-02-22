@@ -25,7 +25,7 @@ export default function CookPage() {
     setIsLoading(true);
     setQuery(dish);
     try {
-      const { data, error } = await supabase.functions.invoke("smartcart-ai", {
+      const { data, error } = await supabase.functions.invoke("tastestack-ai", {
         body: { action: "generate_recipe", dish, pantryItems: [] },
       });
       if (error) throw error;
