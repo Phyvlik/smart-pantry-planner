@@ -233,7 +233,7 @@ export default function IngredientFinderPage() {
         </AnimatePresence>
 
         <p className="text-xs text-muted-foreground mt-8 text-center">
-          Powered by Kroger API. Prices may vary by location.
+          Powered by Kroger & Walmart APIs. Prices may vary.
         </p>
       </main>
     </div>
