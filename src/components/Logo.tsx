@@ -13,15 +13,35 @@ export default function Logo({ size = 28, className = "" }: LogoProps) {
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Bottom layer - plate/base */}
-      <rect x="4" y="24" width="24" height="4" rx="2" fill="hsl(var(--primary))" />
-      {/* Middle layer */}
-      <rect x="6" y="17" width="20" height="4" rx="2" fill="hsl(var(--secondary))" />
-      {/* Top layer */}
-      <rect x="8" y="10" width="16" height="4" rx="2" fill="hsl(var(--primary))" opacity="0.7" />
-      {/* Steam wisps */}
-      <path d="M13 8C13 6 14.5 5 14.5 3" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-      <path d="M18 8C18 6 19.5 5 19.5 3" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+      {/* Leaf background */}
+      <path
+        d="M6 26C6 26 4 14 16 6C28 14 26 26 26 26C26 26 22 20 16 18C10 20 6 26 6 26Z"
+        fill="hsl(var(--primary))"
+        opacity="0.15"
+      />
+      <path
+        d="M6 26C6 26 4 14 16 6C28 14 26 26 26 26"
+        stroke="hsl(var(--primary))"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        fill="none"
+        opacity="0.4"
+      />
+      {/* Leaf vein */}
+      <path
+        d="M16 6V26"
+        stroke="hsl(var(--primary))"
+        strokeWidth="1"
+        opacity="0.2"
+        strokeLinecap="round"
+      />
+      {/* Fork */}
+      <line x1="16" y1="28" x2="16" y2="14" stroke="hsl(var(--foreground))" strokeWidth="2" strokeLinecap="round" />
+      <line x1="12" y1="8" x2="12" y2="14" stroke="hsl(var(--foreground))" strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="16" y1="8" x2="16" y2="14" stroke="hsl(var(--foreground))" strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="20" y1="8" x2="20" y2="14" stroke="hsl(var(--foreground))" strokeWidth="1.8" strokeLinecap="round" />
+      {/* Fork bridge */}
+      <path d="M12 14Q16 16 20 14" stroke="hsl(var(--foreground))" strokeWidth="1.8" strokeLinecap="round" fill="none" />
     </svg>
   );
 }
