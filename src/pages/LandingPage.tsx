@@ -51,7 +51,7 @@ export default function LandingPage() {
               </motion.h1>
 
               <motion.p custom={2} variants={fadeUp} className="max-w-xl mx-auto text-lg text-muted-foreground leading-relaxed">
-                Tell me what you want to cook. I'll find the recipe, check your pantry, compare store prices, and guide you step by step — even with my voice.
+                Tell me what you want to cook. I'll find the recipe, check your pantry, compare store prices, and guide you step by step, even with my voice.
               </motion.p>
 
               <motion.div custom={3} variants={fadeUp} className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
