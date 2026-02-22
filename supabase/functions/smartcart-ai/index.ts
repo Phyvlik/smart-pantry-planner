@@ -10,8 +10,8 @@ serve(async (req) => {
 
   try {
     const { action, dish, pantryItems, recipe, message, recipeName, recipeSteps, currentStepIndex } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     let systemPrompt = "";
     let userPrompt = "";
@@ -85,42 +85,39 @@ Only return valid JSON, nothing else.`;
         throw new Error("Invalid action");
     }
 
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
-    const requestBody = JSON.stringify({
-      contents: [
-        { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
     });
 
-    let response: Response | null = null;
-    for (const model of models) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: requestBody,
-      });
-      if (res.ok) {
-        response = res;
-        console.log(`Success with model: ${model}`);
-        break;
+    if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      const t = await res.text();
-      console.warn(`Model ${model} failed (${res.status}), trying next...`, t.slice(0, 200));
-      if (res.status !== 429 && res.status !== 503) {
-        throw new Error(`Gemini API error: ${res.status}`);
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "AI credits depleted. Please add credits." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-    }
-    if (!response) {
-      throw new Error("All Gemini models are currently unavailable. Please try again in a moment.");
+      const t = await response.text();
+      console.error("AI error:", response.status, t);
+      throw new Error("AI gateway error");
     }
 
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const content = data.choices?.[0]?.message?.content || "";
 
     // Parse JSON from the response
     let parsed;
