@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import Logo from "@/components/Logo";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin, CheckCircle2, XCircle, Loader2, Search, Store } from "lucide-react";
 import { BestPricesPanel } from "@/components/BestPricesPanel";
@@ -94,7 +93,7 @@ export default function IngredientFinderPage() {
       <div className="flex flex-col min-h-screen bg-background">
         <header className="px-6 h-16 flex items-center bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
           <Link to="/" className="flex items-center gap-2">
-          <Logo />
+            <span className="text-2xl">🍳</span>
             <span className="font-serif font-bold text-xl text-foreground">TasteStack</span>
           </Link>
         </header>
@@ -113,7 +112,7 @@ export default function IngredientFinderPage() {
     <div className="flex flex-col min-h-screen bg-background">
       <header className="px-6 h-16 flex items-center bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
         <Link to="/" className="flex items-center gap-2">
-          <Logo />
+          <span className="text-2xl">🍳</span>
           <span className="font-serif font-bold text-xl text-foreground">TasteStack</span>
         </Link>
       </header>
