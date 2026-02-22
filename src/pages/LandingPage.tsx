@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import Logo from "@/components/Logo";
 import { motion } from "framer-motion";
 import { ChefHat, Search, MapPin, DollarSign, Mic, Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="px-6 h-16 flex items-center justify-between bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
         <Link to="/" className="flex items-center gap-2">
-          <span className="text-2xl">🍳</span>
+          <Logo />
           <span className="font-serif font-bold text-xl text-foreground">TasteStack</span>
         </Link>
         <nav className="hidden sm:flex items-center gap-6">
@@ -158,7 +159,7 @@ export default function LandingPage() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
             >
-              <div className="text-6xl mb-6">🍳</div>
+              <Logo size={64} />
               <h2 className="text-3xl sm:text-4xl font-serif font-bold mb-4">Ready to cook something amazing?</h2>
               <p className="text-muted-foreground mb-8">Your AI kitchen companion is waiting.</p>
               <Button asChild size="lg" className="bg-gradient-warm rounded-full px-10 text-base h-14 shadow-lg hover:shadow-xl transition-shadow">
@@ -175,7 +176,7 @@ export default function LandingPage() {
       <footer className="py-8 border-t border-border bg-muted/30">
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🍳</span>
+            <Logo size={22} />
             <span className="font-serif font-semibold text-foreground">TasteStack</span>
           </div>
           <p className="text-xs text-muted-foreground">© 2026 TasteStack, made with pyaar ❤️</p>
