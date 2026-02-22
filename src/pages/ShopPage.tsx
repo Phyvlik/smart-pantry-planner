@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import Logo from "@/components/Logo";
 import { ArrowLeft, Plus, Trash2, Loader2, MapPin, Search, Store, TrendingDown, CheckCircle2, XCircle } from "lucide-react";
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -157,7 +158,7 @@ export default function ShopPage() {
     <div className="flex flex-col min-h-screen bg-background">
       <header className="px-6 h-16 flex items-center justify-between bg-background/80 backdrop-blur-md border-b border-border/50 sticky top-0 z-50">
         <Link to="/" className="flex items-center gap-2">
-          <span className="text-2xl">🍳</span>
+          <Logo />
           <span className="font-serif font-bold text-xl text-foreground">TasteStack</span>
         </Link>
       </header>
