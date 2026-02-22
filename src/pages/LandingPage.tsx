@@ -178,7 +178,7 @@ export default function LandingPage() {
             <span className="text-xl">🍳</span>
             <span className="font-serif font-semibold text-foreground">TasteStack</span>
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 TasteStack, made with pyaar</p>
+          <p className="text-xs text-muted-foreground">© 2026 TasteStack, made with pyaar ❤️</p>
         </div>
       </footer>
     </div>
