@@ -162,7 +162,7 @@ export default function CookPage() {
               <div className="text-center mb-8">
                 <div className="text-5xl mb-3">🔥</div>
                 <h1 className="text-3xl font-serif font-bold mb-2">Let's Cook: {recipe.name}</h1>
-                <p className="text-muted-foreground">Follow along step by step. Use voice for hands-free cooking.</p>
+                <p className="text-muted-foreground">Follow along step by step with Gemini AI and ElevenLabs voice.</p>
               </div>
 
               <CookMode recipe={recipe} />
